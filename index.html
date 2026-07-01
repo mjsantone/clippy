@@ -1287,7 +1287,12 @@ function drawBubble() {
   const lines = wrapText(game.bubbleText, maxW);
   const bw = Math.min(maxW, Math.max(...lines.map(l => ctx.measureText(l).width))) + 20;
   const bh = lines.length * 12 + 14;
-  const bx = player.cx + 30, by = GROUND_Y - CLIP_BODY_H - bh - 26;
+  // anchor to Clippy's head so the bubble rides along with jumps, hops, and ducks
+  const tiny = player.tinyT > 0 ? 0.6 : 1;
+  const headY = player.bottomY - CLIP_BODY_H * (player.ducking ? 0.55 : 1) * tiny
+    + (player.grounded && game.state === STATE.PLAY ? HOP_PATTERN[player.hopStep] * 2 : 0);
+  const bx = player.cx + 30;
+  const by = Math.max(HUD_H + 6, headY - bh - 12);
   ctx.globalAlpha = Math.min(1, game.bubbleT / 15);
   ctx.fillStyle = '#ffffcc';
   ctx.strokeStyle = '#000000'; ctx.lineWidth = 1;
