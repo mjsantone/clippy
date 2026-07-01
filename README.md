@@ -31,11 +31,22 @@ get him.
 - **Duck** under garish blinking banner ads (*FREE RAM!!! >> CLICK HERE <<*)
 - **Dodge** winged hourglass cursors — time flies
 - **Collect** 3.5" floppy disks (25 pts each, 1.44 MB of pure skill)
-- **Grab the rainbow CD-ROM** to enter *UNREGISTERED HYPERCLIP MODE* and smash
-  windows into flying UI shards
 - **Survive** through nine zones: The Teal Desktop → Spreadsheet Canyon →
   Mail Merge Marshes → Dial-Up Dunes → Comic Sans Grove → The Blue Screen
   Badlands → Recycle Bin Abyss → System32 Catacombs → The Registry (Do Not Edit)
+
+### Power-ups
+
+| Pickup | Effect |
+| --- | --- |
+| 💿 **Rainbow CD-ROM** | *UNREGISTERED HYPERCLIP MODE* — 6 seconds of invincibility; smash windows into flying UI shards |
+| ☕ **Coffee** | 2× points for 9 seconds. Clippy gets the caffeine shakes |
+| 🥇 **Golden Floppy** | Autosave — one free death. On impact: *"Document recovered from autosave. Phew!"* |
+| 📠 **56K Modem** | Dial-up slow-motion for 6 seconds, screech included. The world now loads at 56k |
+| 🂡 **Ace of Hearts** | Solitaire smart bomb — every obstacle on screen explodes into bouncing cards, +50 each |
+
+Active effects show as beveled tags under the score bar and blink when about
+to expire. Effects stack — coffee-doubled card bombs are the path to big scores.
 
 Clippy provides unsolicited commentary throughout, naturally.
 *"It looks like you're trying to survive. Would you like help with that?"*

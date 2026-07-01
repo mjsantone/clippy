@@ -341,6 +341,14 @@ const Sfx = {
   power()  { [523,659,784,1046,1318].forEach((f,i)=>setTimeout(()=>this.tone(f,0.14,'triangle',0.12),i*70)); },
   smash()  { this.tone(180, 0.2, 'sawtooth', 0.14, 60); this.tone(90, 0.25, 'square', 0.1, 40); },
   crash()  { [392,370,349,330].forEach((f,i)=>setTimeout(()=>this.tone(f,0.32,'sawtooth',0.14),i*180)); },
+  coffee() { [660,880,1175,1568].forEach((f,i)=>setTimeout(()=>this.tone(f,0.09,'square',0.10),i*55)); },
+  save()   { this.tone(523,0.12,'triangle',0.12); setTimeout(()=>this.tone(784,0.28,'triangle',0.12),110); },
+  recover(){ [392,523,659,784].forEach((f,i)=>setTimeout(()=>this.tone(f,0.22,'triangle',0.11),i*90)); },
+  modem()  {
+    [1200,2100,1200,2100,1650].forEach((f,i)=>setTimeout(()=>this.tone(f,0.08,'square',0.06),i*85));
+    setTimeout(()=>this.tone(900,0.45,'sawtooth',0.045,250), 440);
+  },
+  card()   { for (let i=0;i<5;i++) setTimeout(()=>this.tone(950-i*130,0.035,'square',0.09),i*45); },
   chime()  { [330,415,494,659].forEach((f,i)=>setTimeout(()=>this.tone(f,0.9,'triangle',0.10),i*120)); },
   // ------ music ------
   LEAD: [523.25,659.25,783.99,659.25, 440,523.25,659.25,523.25, 349.23,440,523.25,440, 392,493.88,587.33,783.99],
@@ -397,6 +405,11 @@ const QUIPS = {
              "Whew! I felt that in my wire.",
              "Careful! You only get one paperclip body."],
   power:    "UNREGISTERED HYPERCLIP MODE!! (30-day trial)",
+  coffee:   "COFFEE!! I can feel my wire vibrating! 2X points!",
+  save:     "Autosaved! Everyone gets one free mistake.",
+  saveUsed: "Document recovered from autosave. Phew!",
+  modem:    "Dial-up engaged! The world now loads at 56k.",
+  card:     "It looks like you're trying to win Solitaire. Deal 'em!",
   smash:    "It looks like that window stopped responding.",
   floppy5:  "You've got floppy! That's 1.44 MB of pure skill.",
   zone:     "Now entering: ",
@@ -422,6 +435,9 @@ const game = {
   coins: [],
   particles: [],
   nextSpawnX: 0,
+  multT: 0,          // coffee: 2x score frames remaining
+  slowmoT: 0,        // modem: slow-motion frames remaining
+  lastPowerDist: 0,
   bubbleText: '',
   bubbleT: 0,
   quipCooldown: 0,
@@ -445,6 +461,7 @@ const player = {
   spinning: false,
   squashT: 0,
   inv: 0,                  // invincibility frames remaining
+  autosave: false,         // one free crash
   trail: [],
   // running-hop (his walk cycle IS the hop, straight from Clippy.tsx)
   hopStep: 0, hopFrame: 0, hopWait: 0,
@@ -457,10 +474,11 @@ function resetRun() {
   game.zoneIdx = 0; game.newHi = false; game.shake = 0;
   game.obstacles = []; game.coins = []; game.particles = [];
   game.nextSpawnX = W + 220;
+  game.multT = 0; game.slowmoT = 0; game.lastPowerDist = 0;
   game.bubbleT = 0; game.quipCooldown = 0; game.flags = {};
   player.bottomY = GROUND_Y; player.vy = 0; player.grounded = true;
   player.jumps = 0; player.ducking = false; player.rot = 0;
-  player.spinning = false; player.inv = 0; player.trail = [];
+  player.spinning = false; player.inv = 0; player.autosave = false; player.trail = [];
   player.hopStep = 0; player.hopFrame = 0; player.hopWait = 0;
   say(QUIPS.start, 200);
   setStatus('Running… don’t let the paperclip down.');
@@ -764,8 +782,18 @@ function spawnCoins(x) {
       game.coins.push({ kind: 'floppy', x: x + i * 26, y, w: 14, h: 15 });
     }
   }
-  if (game.dist > 700 && Math.random() < 0.16) {
-    game.coins.push({ kind: 'cd', x: x + 90, y: GROUND_Y - 172, w: 22, h: 22 });
+  // power-ups appear on coin slots, rate-limited by distance
+  const POWERS = [
+    { kind: 'coffee', min: 500 }, { kind: 'cd', min: 700 }, { kind: 'save', min: 800 },
+    { kind: 'modem', min: 1000 }, { kind: 'card', min: 1300 },
+  ];
+  if (game.dist - game.lastPowerDist > 900 && Math.random() < 0.55) {
+    const avail = POWERS.filter(p => game.dist > p.min);
+    if (avail.length) {
+      game.lastPowerDist = game.dist;
+      const p = pick(avail);
+      game.coins.push({ kind: p.kind, x: x + 100, y: GROUND_Y - pick([80, 140, 168]), w: 22, h: 22 });
+    }
   }
 }
 
@@ -792,16 +820,31 @@ function burst(x, y, colors, n, force) {
 
 function updateParticles() {
   for (const p of game.particles) {
-    p.x += p.vx; p.y += p.vy; p.vy += 0.18; p.life--;
+    p.x += p.vx; p.y += p.vy; p.life--;
+    if (p.card) {
+      p.vy += 0.28;
+      // solitaire-win bounce off the taskbar
+      if (p.y > GROUND_Y - 12 && p.vy > 0) { p.y = GROUND_Y - 12; p.vy *= -0.75; p.vx *= 0.92; }
+    } else {
+      p.vy += 0.18;
+    }
   }
-  game.particles = game.particles.filter(p => p.life > 0 && p.y < H + 10);
+  game.particles = game.particles.filter(p => p.life > 0 && p.y < H + 10 && p.x > -20);
 }
 
 function drawParticles() {
   for (const p of game.particles) {
     ctx.globalAlpha = Math.min(1, p.life / 20);
-    ctx.fillStyle = p.c;
-    ctx.fillRect(p.x, p.y, p.s, p.s);
+    if (p.card) {
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(p.x, p.y, 9, 12);
+      ctx.fillStyle = '#404040'; ctx.fillRect(p.x, p.y, 9, 1); ctx.fillRect(p.x, p.y + 11, 9, 1);
+      ctx.fillRect(p.x, p.y, 1, 12); ctx.fillRect(p.x + 8, p.y, 1, 12);
+      ctx.fillStyle = p.red ? '#cc0000' : '#000000';
+      ctx.fillRect(p.x + 3, p.y + 4, 3, 3); ctx.fillRect(p.x + 2, p.y + 4, 1, 2); ctx.fillRect(p.x + 6, p.y + 4, 1, 2);
+    } else {
+      ctx.fillStyle = p.c;
+      ctx.fillRect(p.x, p.y, p.s, p.s);
+    }
   }
   ctx.globalAlpha = 1;
 }
@@ -924,7 +967,8 @@ function drawPlayer() {
   }
 
   ctx.save();
-  ctx.translate(player.cx, player.bottomY + hop);
+  const jitter = game.multT > 0 ? rnd(-1.2, 1.2) : 0;   // caffeine shakes
+  ctx.translate(player.cx + jitter, player.bottomY + hop + jitter * 0.5);
   ctx.rotate(player.rot);
   ctx.scale(sx, sy);
   ctx.translate(-13 * PXC, -35 * PXC);
@@ -950,12 +994,20 @@ function obstacleBox(o) {
   return { x: o.x + 3, y: y + 3, w: o.w - 6, h: o.h - 5 };
 }
 
+function addScore(n) {
+  game.score += n * (game.multT > 0 ? 2 : 1);
+}
+
 function updateWorld() {
-  game.dist += game.speed;
-  game.score += game.speed * 0.12;
+  const ts = game.slowmoT > 0 ? 0.45 : 1;   // 56k slow-mo
+  const sp = game.speed * ts;
+  game.dist += sp;
+  addScore(sp * 0.12);
   game.speed = Math.min(9.5, game.speed + 0.0001 * game.speed);
   if (game.quipCooldown > 0) game.quipCooldown--;
   if (game.bubbleT > 0) game.bubbleT--;
+  if (game.multT > 0) game.multT--;
+  if (game.slowmoT > 0) game.slowmoT--;
 
   // zone announcements
   const zi = Math.min(ZONES.length - 1, Math.floor(game.score / 1500));
@@ -971,7 +1023,7 @@ function updateWorld() {
 
   // obstacles
   for (const o of game.obstacles) {
-    o.x -= game.speed;
+    o.x -= sp;
     if (o.type === 'hourglass') {
       o.hitY = o.baseY + Math.sin(game.frame * 0.06 + o.ph) * o.amp;
     }
@@ -979,7 +1031,7 @@ function updateWorld() {
     if (!o.dead && overlap(pbox, box)) {
       if (player.inv > 0) {
         o.dead = true;
-        game.score += 50;
+        addScore(50);
         burst(o.x + o.w / 2, box.y + box.h / 2, ['#c0c0c0', '#ffffff', '#000080', '#0000aa'], 16, 4);
         game.shake = 8;
         Sfx.smash();
@@ -1002,23 +1054,46 @@ function updateWorld() {
   }
   game.obstacles = game.obstacles.filter(o => !o.dead && o.x + o.w > -60);
 
-  // coins
+  // coins + power-ups
   for (const cn of game.coins) {
-    cn.x -= game.speed;
+    cn.x -= sp;
     if (!cn.taken && overlap(pbox, cn)) {
       cn.taken = true;
       if (cn.kind === 'floppy') {
         game.floppies++;
-        game.score += 25;
+        addScore(25);
         burst(cn.x + 7, cn.y + 7, ['#ffe66e', '#ffffff', '#4a5cc8'], 6, 2);
         Sfx.coin();
         if (game.floppies === 5) quip(QUIPS.floppy5);
-      } else {
+      } else if (cn.kind === 'cd') {
         player.inv = 60 * 6;
-        game.score += 100;
+        addScore(100);
         burst(cn.x + 11, cn.y + 11, ['#ff4040', '#ffe66e', '#40ff70', '#40a0ff', '#e040ff'], 22, 3);
         Sfx.power();
         say(QUIPS.power, 160);
+      } else if (cn.kind === 'coffee') {
+        game.multT = 60 * 9;
+        addScore(50);
+        burst(cn.x + 11, cn.y + 11, ['#6b4226', '#a67447', '#ffffff'], 10, 2.5);
+        Sfx.coffee();
+        say(QUIPS.coffee, 160);
+      } else if (cn.kind === 'save') {
+        player.autosave = true;
+        addScore(50);
+        burst(cn.x + 11, cn.y + 11, ['#ffd24a', '#ffe66e', '#ffffff'], 12, 2.5);
+        Sfx.save();
+        say(QUIPS.save, 160);
+      } else if (cn.kind === 'modem') {
+        game.slowmoT = 60 * 6;
+        addScore(50);
+        burst(cn.x + 11, cn.y + 11, ['#40ff70', '#ff4040', '#c0c0c0'], 10, 2.5);
+        Sfx.modem();
+        say(QUIPS.modem, 160);
+      } else if (cn.kind === 'card') {
+        addScore(50);
+        cardBomb();
+        Sfx.card();
+        say(QUIPS.card, 160);
       }
     }
   }
@@ -1028,7 +1103,43 @@ function updateWorld() {
   if (game.shake > 0) game.shake--;
 }
 
+function cardBomb() {
+  game.shake = 10;
+  for (const o of game.obstacles) {
+    if (o.dead || o.x > W + 20 || o.x + o.w < -20) continue;
+    o.dead = true;
+    addScore(50);
+    burstCards(o.x + o.w / 2, o.y + o.h / 2);
+  }
+}
+
+function burstCards(x, y) {
+  for (let i = 0; i < 6; i++) {
+    game.particles.push({
+      x, y,
+      vx: rnd(-3.5, 1.5), vy: rnd(-6, -2),
+      s: 9, life: rnd(90, 150), c: '#ffffff',
+      card: true, red: Math.random() < 0.5,
+    });
+  }
+}
+
 function crash() {
+  if (player.autosave) {
+    // one free mistake: restore from autosave
+    player.autosave = false;
+    player.inv = Math.max(player.inv, 100);
+    game.shake = 8;
+    for (const o of game.obstacles) {
+      if (o.dead || o.x > W + 20 || o.x + o.w < -20) continue;
+      o.dead = true;
+      burst(o.x + o.w / 2, o.y + o.h / 2, ['#ffd24a', '#ffffff', '#c0c0c0'], 10, 3);
+    }
+    Sfx.recover();
+    say(QUIPS.saveUsed, 160);
+    setStatus('Document recovered from autosave.');
+    return;
+  }
   game.state = STATE.CRASH;
   game.crashT = 0;
   game.shake = 14;
@@ -1069,8 +1180,29 @@ function drawHUD() {
   panel(142, 116, 'HI ' + pad(game.hi, 6), '#000080');
   panel(264, 76, '💾 x ' + game.floppies);
   panel(346, 168, ZONES[Math.min(game.zoneIdx, ZONES.length - 1)], '#404040');
-  if (player.inv > 0) panel(520, 70, 'HYPER!', 'hsl(' + ((game.frame * 12) % 360) + ',90%,40%)');
-  else if (Sfx.muted) panel(520, 70, 'MUTED', '#a00000');
+  if (Sfx.muted) panel(520, 60, 'MUTED', '#a00000');
+}
+
+// active power-up tags, floating just below the HUD bar
+function drawBadges() {
+  const badges = [];
+  if (player.inv > 0)     badges.push(['HYPER!', 'hsl(' + ((game.frame * 12) % 360) + ',90%,40%)', player.inv]);
+  if (game.multT > 0)     badges.push(['2X PTS', '#7a3b00', game.multT]);
+  if (game.slowmoT > 0)   badges.push(['56K SLO-MO', '#004080', game.slowmoT]);
+  if (player.autosave)    badges.push(['AUTOSAVED', '#0a7a2a', -1]);
+  let bx = W - 8;
+  ctx.font = 'bold 9px monospace';
+  for (const [text, color, t] of badges) {
+    const bw = ctx.measureText(text).width + 12;
+    bx -= bw + 5;
+    // flash the tag when a timed effect is about to expire
+    if (t >= 0 && t < 120 && Math.floor(game.frame / 6) % 2 === 0) continue;
+    ctx.fillStyle = '#c0c0c0'; ctx.fillRect(bx, HUD_H + 5, bw, 15);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(bx, HUD_H + 5, bw, 1); ctx.fillRect(bx, HUD_H + 5, 1, 15);
+    ctx.fillStyle = '#404040'; ctx.fillRect(bx, HUD_H + 19, bw, 1); ctx.fillRect(bx + bw - 1, HUD_H + 5, 1, 15);
+    ctx.fillStyle = color;
+    ctx.fillText(text, bx + 6, HUD_H + 16);
+  }
 }
 
 function wrapText(text, maxW) {
@@ -1303,7 +1435,72 @@ function drawObstacle(o) {
 }
 function drawCollectible(cn) {
   if (cn.kind === 'floppy') drawFloppy(cn);
-  else drawCD(cn);
+  else if (cn.kind === 'cd') drawCD(cn);
+  else if (cn.kind === 'coffee') drawCoffeeMug(cn);
+  else if (cn.kind === 'save') drawGoldFloppy(cn);
+  else if (cn.kind === 'modem') drawModem(cn);
+  else if (cn.kind === 'card') drawAceCard(cn);
+}
+
+function drawCoffeeMug(cn) {
+  const bob = Math.sin(game.frame * 0.09 + cn.x * 0.03) * 3;
+  const x = cn.x + 2, y = cn.y + 4 + bob;
+  ctx.fillStyle = '#f4f4f8'; ctx.fillRect(x, y, 13, 13);           // mug
+  ctx.fillStyle = '#c8c8d0'; ctx.fillRect(x, y + 11, 13, 2);
+  ctx.fillStyle = '#f4f4f8'; ctx.fillRect(x + 13, y + 3, 4, 7);    // handle
+  ctx.fillStyle = '#008080'; ctx.fillRect(x + 14, y + 5, 2, 3);    // handle hole
+  ctx.fillStyle = '#5a3a1a'; ctx.fillRect(x + 1, y + 1, 11, 3);    // coffee
+  // steam
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  const st = Math.floor(game.frame / 8) % 3;
+  ctx.fillRect(x + 3 + st, y - 5, 2, 2); ctx.fillRect(x + 8 - st, y - 9, 2, 2);
+}
+
+function drawGoldFloppy(cn) {
+  const bob = Math.sin(game.frame * 0.09 + cn.x * 0.03) * 3;
+  const x = cn.x + 3, y = cn.y + 2 + bob;
+  ctx.fillStyle = '#c89a18'; ctx.fillRect(x, y, 15, 16);
+  ctx.fillStyle = '#e8c04a'; ctx.fillRect(x, y, 15, 2);
+  ctx.fillStyle = '#f4e4b0'; ctx.fillRect(x + 4, y, 9, 6);         // shutter
+  ctx.fillStyle = '#8a6a10'; ctx.fillRect(x + 10, y + 1, 2, 4);    // slot
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(x + 2, y + 9, 11, 6);    // label
+  ctx.fillStyle = '#0a7a2a';                                       // green check
+  ctx.fillRect(x + 4, y + 12, 2, 2); ctx.fillRect(x + 6, y + 13, 2, 2);
+  ctx.fillRect(x + 8, y + 11, 2, 2); ctx.fillRect(x + 10, y + 10, 1, 2);
+  if (Math.floor(game.frame / 14) % 3 === 0) {                     // sparkle
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(x + 13, y - 2, 2, 2);
+  }
+}
+
+function drawModem(cn) {
+  const bob = Math.sin(game.frame * 0.09 + cn.x * 0.03) * 3;
+  const x = cn.x, y = cn.y + 4 + bob;
+  ctx.fillStyle = '#b8b8c0'; ctx.fillRect(x, y, 22, 12);
+  ctx.fillStyle = '#d8d8e0'; ctx.fillRect(x, y, 22, 2);
+  ctx.fillStyle = '#70707a'; ctx.fillRect(x, y + 10, 22, 2);
+  // blinking LEDs
+  const on = Math.floor(game.frame / 7) % 2 === 0;
+  ctx.fillStyle = on ? '#40ff70' : '#0a5a20'; ctx.fillRect(x + 3, y + 5, 3, 3);
+  ctx.fillStyle = on ? '#0a5a20' : '#40ff70'; ctx.fillRect(x + 8, y + 5, 3, 3);
+  ctx.fillStyle = on ? '#ff4040' : '#6a1010'; ctx.fillRect(x + 13, y + 5, 3, 3);
+  // phone cord
+  ctx.fillStyle = '#404048';
+  for (let i = 0; i < 4; i++) ctx.fillRect(x + 18 + (i % 2) * 2, y + 12 + i * 2, 2, 2);
+}
+
+function drawAceCard(cn) {
+  const x = cn.x + 4, y = cn.y + 1;
+  ctx.save();
+  ctx.translate(x + 7, y + 10 + Math.sin(game.frame * 0.09 + cn.x * 0.03) * 3);
+  ctx.rotate(Math.sin(game.frame * 0.06) * 0.18);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(-7, -10, 14, 20);
+  ctx.fillStyle = '#404040';
+  ctx.fillRect(-7, -10, 14, 1); ctx.fillRect(-7, 9, 14, 1);
+  ctx.fillRect(-7, -10, 1, 20); ctx.fillRect(6, -10, 1, 20);
+  ctx.fillStyle = '#cc0000';
+  ctx.font = 'bold 8px monospace'; ctx.fillText('A', -5, -2);
+  ctx.fillRect(-1, 1, 4, 4); ctx.fillRect(-2, 1, 1, 2); ctx.fillRect(3, 1, 1, 2);  // heart-ish
+  ctx.restore();
 }
 
 /* ---------------- main loop -------------------------------------------- */
@@ -1351,8 +1548,13 @@ function tick() {
       for (const o of game.obstacles) drawObstacle(o);
       drawParticles();
       drawPlayer();
+      if (game.slowmoT > 0) {           // dial-up slow-mo tint
+        ctx.fillStyle = 'rgba(0,60,170,0.13)';
+        ctx.fillRect(0, 0, W, H);
+      }
       drawBubble();
       drawHUD();
+      drawBadges();
       if (game.paused) drawPauseOverlay();
     }
     document.getElementById('statusScore').textContent = 'SCORE ' + pad(game.score, 6);
@@ -1528,6 +1730,14 @@ updateClock();
 setInterval(updateClock, 1000);
 
 /* ---------------- go --------------------------------------------------- */
+
+// dev/debug handle (also: a cheat menu, in the grand 90s tradition)
+window.__clippy = {
+  game, player,
+  give(kind) {
+    game.coins.push({ kind, x: player.cx + 50, y: GROUND_Y - 70, w: 22, h: 22 });
+  },
+};
 
 requestAnimationFrame(frame);
 
