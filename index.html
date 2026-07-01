@@ -1,0 +1,1537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CLIPPY.EXE — The Office Assistant Strikes Back</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📎</text></svg>">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    font-family: Tahoma, 'MS Sans Serif', 'Segoe UI', sans-serif;
+    font-size: 11px;
+    background: #008080;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* ---------- desktop icons ---------- */
+  .desktop-icons {
+    position: fixed; top: 12px; left: 12px;
+    display: flex; flex-direction: column; gap: 18px;
+    z-index: 1;
+  }
+  .dicon { width: 74px; text-align: center; color: #fff; cursor: default; }
+  .dicon .glyph { font-size: 30px; filter: drop-shadow(1px 1px 0 rgba(0,0,0,.5)); }
+  .dicon .lbl { margin-top: 3px; padding: 1px 2px; display: inline-block; }
+  .dicon:hover .lbl { background: #000080; }
+
+  /* ---------- win95 bevels ---------- */
+  .bevel-out {
+    background: #c0c0c0;
+    box-shadow: inset -1px -1px 0 #0a0a0a, inset 1px 1px 0 #ffffff,
+                inset -2px -2px 0 #808080, inset 2px 2px 0 #dfdfdf;
+  }
+  .bevel-in {
+    background: #c0c0c0;
+    box-shadow: inset -1px -1px 0 #ffffff, inset 1px 1px 0 #0a0a0a,
+                inset -2px -2px 0 #dfdfdf, inset 2px 2px 0 #808080;
+  }
+  .bevel-thin-in {
+    box-shadow: inset -1px -1px 0 #ffffff, inset 1px 1px 0 #808080;
+  }
+
+  /* ---------- main window ---------- */
+  .app-window {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, calc(-50% - 14px));
+    padding: 3px;
+    z-index: 2;
+  }
+  .titlebar {
+    display: flex; align-items: center; gap: 4px;
+    height: 20px;
+    padding: 2px 3px;
+    background: linear-gradient(90deg, #000080, #1084d0);
+    color: #fff; font-weight: bold;
+  }
+  .titlebar .ticon { font-size: 13px; line-height: 1; }
+  .titlebar .ttext { flex: 1; white-space: nowrap; overflow: hidden; }
+  .tbtn {
+    width: 16px; height: 14px;
+    font-size: 9px; font-weight: bold; line-height: 12px; text-align: center;
+    color: #000; cursor: pointer;
+  }
+  .tbtn:active { box-shadow: inset -1px -1px 0 #ffffff, inset 1px 1px 0 #0a0a0a; }
+
+  .menubar { display: flex; padding: 1px 0; }
+  .menubar .mitem { padding: 2px 7px 3px; cursor: default; position: relative; }
+  .menubar .mitem:hover, .menubar .mitem.open { background: #000080; color: #fff; }
+  .menubar .mitem .u { text-decoration: underline; }
+  .dropdown {
+    position: absolute; top: 100%; left: 0;
+    min-width: 150px;
+    padding: 2px;
+    color: #000;
+    z-index: 50;
+    display: none;
+  }
+  .mitem.open .dropdown { display: block; }
+  .dropdown .ditem { padding: 4px 18px; white-space: nowrap; display: flex; justify-content: space-between; gap: 18px; }
+  .dropdown .ditem:hover { background: #000080; color: #fff; }
+  .dropdown .ditem .kbd { color: #808080; }
+  .dropdown .ditem:hover .kbd { color: #c0c0c0; }
+  .dropdown hr { border: 0; border-top: 1px solid #808080; border-bottom: 1px solid #fff; margin: 2px 1px; }
+
+  .canvas-frame { margin: 0 3px; padding: 2px; }
+  canvas#game {
+    display: block;
+    width: min(960px, 94vw, calc((100vh - 170px) * 16 / 9));
+    aspect-ratio: 16 / 9;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background: #008080;
+    cursor: crosshair;
+  }
+
+  .statusbar { display: flex; gap: 2px; margin: 3px; height: 20px; }
+  .statusbar .pane { padding: 3px 6px; white-space: nowrap; overflow: hidden; }
+  .statusbar .pane.grow { flex: 1; }
+
+  /* ---------- taskbar ---------- */
+  .taskbar {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    height: 30px;
+    padding: 2px 3px;
+    display: flex; align-items: center; gap: 5px;
+    background: #c0c0c0;
+    box-shadow: inset 0 1px 0 #dfdfdf, inset 0 2px 0 #ffffff;
+    z-index: 10;
+  }
+  .startbtn {
+    display: flex; align-items: center; gap: 4px;
+    height: 24px; padding: 0 8px;
+    font-weight: bold; font-size: 11px;
+    cursor: pointer;
+  }
+  .startbtn:active { box-shadow: inset -1px -1px 0 #ffffff, inset 1px 1px 0 #0a0a0a; }
+  .winflag { display: grid; grid-template-columns: 6px 6px; grid-template-rows: 6px 6px; gap: 1px; transform: skewY(-6deg); }
+  .winflag i { display: block; }
+  .winflag i:nth-child(1){ background:#e04b34; } .winflag i:nth-child(2){ background:#7db700; }
+  .winflag i:nth-child(3){ background:#2e8fef; } .winflag i:nth-child(4){ background:#ffba08; }
+  .taskbtn {
+    height: 24px; padding: 0 10px;
+    display: flex; align-items: center; gap: 5px;
+    font-weight: bold;
+    box-shadow: inset -1px -1px 0 #ffffff, inset 1px 1px 0 #0a0a0a,
+                inset -2px -2px 0 #dfdfdf, inset 2px 2px 0 #808080;
+    background: repeating-conic-gradient(#ffffff 0 25%, #c0c0c0 0 50%) 0 0/2px 2px;
+  }
+  .tray {
+    margin-left: auto;
+    height: 24px; padding: 0 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #clock { min-width: 52px; text-align: center; }
+  #trayVol { cursor: pointer; }
+
+  /* ---------- dialogs ---------- */
+  .dlg-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    display: none; align-items: center; justify-content: center;
+  }
+  .dlg-overlay.show { display: flex; }
+  .dlg { width: 330px; padding: 3px; }
+  .dlg .body { padding: 14px 12px; display: flex; gap: 12px; align-items: flex-start; color: #000; }
+  .dlg .body .icon { font-size: 32px; }
+  .dlg .btnrow { display: flex; justify-content: center; gap: 8px; padding: 0 0 12px; }
+  .btn95 {
+    min-width: 72px; padding: 4px 10px;
+    font-family: inherit; font-size: 11px;
+    border: none; cursor: pointer;
+  }
+  .btn95:active { box-shadow: inset -1px -1px 0 #ffffff, inset 1px 1px 0 #0a0a0a; }
+  .btn95.default { outline: 1px dotted #000; outline-offset: -5px; }
+</style>
+</head>
+<body>
+
+<div class="desktop-icons">
+  <div class="dicon"><div class="glyph">🖥️</div><div class="lbl">My Computer</div></div>
+  <div class="dicon"><div class="glyph">🗑️</div><div class="lbl">Recycle Bin</div></div>
+  <div class="dicon"><div class="glyph">📁</div><div class="lbl">My Documents</div></div>
+  <div class="dicon"><div class="glyph">🌐</div><div class="lbl">The Internet</div></div>
+</div>
+
+<div class="app-window bevel-out">
+  <div class="titlebar">
+    <span class="ticon">📎</span>
+    <span class="ttext" id="winTitle">CLIPPY.EXE — The Office Assistant Strikes Back</span>
+    <div class="tbtn bevel-out">_</div>
+    <div class="tbtn bevel-out">▢</div>
+    <div class="tbtn bevel-out" id="btnClose">✕</div>
+  </div>
+  <div class="menubar" id="menubar">
+    <div class="mitem" data-menu="file"><span class="u">F</span>ile
+      <div class="dropdown bevel-out">
+        <div class="ditem" data-act="new">New Game <span class="kbd">Enter</span></div>
+        <div class="ditem" data-act="pause">Pause <span class="kbd">P</span></div>
+        <hr>
+        <div class="ditem" data-act="exit">Exit</div>
+      </div>
+    </div>
+    <div class="mitem" data-menu="none"><span class="u">E</span>dit</div>
+    <div class="mitem" data-menu="none"><span class="u">V</span>iew</div>
+    <div class="mitem" data-menu="none"><span class="u">I</span>nsert</div>
+    <div class="mitem" data-menu="none">F<span class="u">o</span>rmat</div>
+    <div class="mitem" data-menu="help"><span class="u">H</span>elp
+      <div class="dropdown bevel-out">
+        <div class="ditem" data-act="about">About CLIPPY.EXE…</div>
+      </div>
+    </div>
+  </div>
+  <div class="canvas-frame bevel-in">
+    <canvas id="game" width="640" height="360"></canvas>
+  </div>
+  <div class="statusbar">
+    <div class="pane grow bevel-thin-in" id="statusMsg">Ready. It looks like you're trying to play a game.</div>
+    <div class="pane bevel-thin-in" id="statusScore">SCORE 0</div>
+    <div class="pane bevel-thin-in">640K RAM</div>
+  </div>
+</div>
+
+<div class="taskbar">
+  <div class="startbtn bevel-out" id="btnStart"><span class="winflag"><i></i><i></i><i></i><i></i></span>Start</div>
+  <div class="taskbtn">📎 CLIPPY.EXE</div>
+  <div class="tray bevel-thin-in"><span id="trayVol" title="Toggle sound (M)">🔊</span><span id="clock">12:00 PM</span></div>
+</div>
+
+<div class="dlg-overlay" id="dlgOverlay">
+  <div class="dlg bevel-out">
+    <div class="titlebar"><span class="ticon" id="dlgIcon">📎</span><span class="ttext" id="dlgTitle">About</span><div class="tbtn bevel-out" data-dlg="close">✕</div></div>
+    <div class="body"><div class="icon" id="dlgBigIcon">📎</div><div id="dlgText">…</div></div>
+    <div class="btnrow"><button class="btn95 bevel-out default" data-dlg="close">OK</button></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+(function () {
+
+/* ================================================================
+   CLIPPY.EXE — a 90s Windows side-scroller
+   Pixel-art Clippy ported from the original Clippy.tsx canvas drawer
+   ================================================================ */
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const W = 640, H = 360;
+const GROUND_Y = 322;          // top of the taskbar-ground
+const HUD_H = 22;
+
+/* ---------------- Clippy pixel drawer (ported from Clippy.tsx) -------- */
+
+function createClippyDrawer(c, PX) {
+  const DK = '#48484f', MD = '#78787f', LT = '#a8a8b2', HI = '#c4c4ce';
+  const GL = '#dcdce4', WH = '#ffffff', PU = '#2a1810', EO = '#181820';
+  const EB = '#4a3828', EG = '#eeeef6';
+
+  const px = (x, y, col) => { c.fillStyle = col; c.fillRect(x * PX, y * PX, PX, PX); };
+
+  const drawBody = () => {
+    for (let y = 12; y <= 31; y++) { px(6,y,GL); px(7,y,HI); px(8,y,LT); px(9,y,MD); }
+    px(7,11,GL); px(8,11,HI); px(9,11,LT); px(10,11,MD);
+    px(8,10,GL); px(9,10,HI); px(10,10,HI); px(11,10,LT);
+    for (let x = 11; x <= 15; x++) { px(x,9,GL); px(x,10,HI); px(x,11,LT); }
+    px(16,10,HI); px(17,10,LT); px(16,11,LT); px(17,11,MD);
+    px(17,12,MD); px(18,11,MD); px(18,12,DK);
+    for (let y = 12; y <= 31; y++) { px(16,y,HI); px(17,y,LT); px(18,y,MD); px(19,y,DK); }
+    for (let x = 9; x <= 16; x++) { px(x,32,LT); px(x,33,MD); px(x,34,DK); }
+    px(6,32,HI); px(7,32,HI); px(8,32,LT); px(7,33,LT); px(8,33,MD); px(8,34,DK);
+    px(17,32,MD); px(18,32,DK); px(17,33,DK); px(18,33,DK);
+    for (let y = 20; y <= 28; y++) { px(10,y,GL); px(11,y,HI); px(12,y,MD); }
+    for (let y = 20; y <= 28; y++) { px(14,y,HI); px(15,y,LT); px(16,y,MD); }
+    px(10,19,HI); px(11,19,HI); px(12,19,LT); px(13,19,LT); px(14,19,LT); px(15,19,MD);
+    px(11,18,GL); px(12,18,HI); px(13,18,HI); px(14,18,LT); px(15,18,MD);
+    px(10,29,HI); px(11,29,LT); px(12,29,LT); px(13,29,MD); px(14,29,MD); px(15,29,DK);
+    px(11,30,LT); px(12,30,MD); px(13,30,MD); px(14,30,DK);
+    px(12,31,DK); px(13,31,DK);
+  };
+
+  const drawEyes = (pdx, pdy, blink) => {
+    const drawOneEye = (cx, cy) => {
+      if (blink) {
+        for (let x = cx-2; x <= cx+2; x++) px(x, cy, EO);
+        px(cx-1,cy-1,EB); px(cx,cy-1,EB); px(cx+1,cy-1,EB);
+        return;
+      }
+      px(cx-1,cy-4,EB); px(cx,cy-4,EB); px(cx+1,cy-4,EB);
+      px(cx-1,cy-3,EO); px(cx,cy-3,EO); px(cx+1,cy-3,EO);
+      for (let dy = -2; dy <= 1; dy++) {
+        px(cx-2,cy+dy,EO); px(cx-1,cy+dy,WH); px(cx,cy+dy,WH); px(cx+1,cy+dy,WH); px(cx+2,cy+dy,EO);
+      }
+      px(cx-1,cy+2,EO); px(cx,cy+2,EO); px(cx+1,cy+2,EO);
+      const ppx = cx+pdx, ppy = cy+pdy-1;
+      px(ppx,ppy,PU); px(ppx+1,ppy,PU); px(ppx,ppy+1,PU); px(ppx+1,ppy+1,PU);
+      px(ppx-1,ppy-1,EG);
+    };
+    drawOneEye(10, 7);
+    drawOneEye(16, 7);
+  };
+
+  return { drawBody, drawEyes };
+}
+
+/* Eye animation sequences, from Clippy.tsx */
+const IDLE_SEQUENCES = [
+  [{s:'center',d:80},{s:'right',d:50},{s:'center',d:25},{s:'blink',d:7},{s:'center',d:70},{s:'left',d:40},{s:'center',d:30},{s:'up',d:35},{s:'center',d:20},{s:'blink',d:7}],
+  [{s:'center',d:40},{s:'blink',d:6},{s:'center',d:8},{s:'blink',d:6},{s:'center',d:20},{s:'right',d:90},{s:'center',d:30}],
+  [{s:'center',d:30},{s:'left',d:120},{s:'blink',d:7},{s:'left',d:40},{s:'center',d:50}],
+  [{s:'center',d:20},{s:'left',d:12},{s:'right',d:12},{s:'left',d:10},{s:'center',d:15},{s:'blink',d:7},{s:'center',d:60}],
+  [{s:'center',d:140},{s:'blink',d:7},{s:'center',d:60}],
+  [{s:'up',d:50},{s:'center',d:15},{s:'right',d:35},{s:'center',d:20},{s:'blink',d:7},{s:'left',d:30},{s:'up',d:25},{s:'center',d:40}],
+];
+const HOP_PATTERN = [0,-1,-2,-3,-3,-3,-3,-2,-1,0];
+
+function resolveEyeState(s) {
+  let pdx = 0, pdy = 0, blink = false;
+  if (s === 'right') pdx = 1;
+  else if (s === 'left') pdx = -1;
+  else if (s === 'up') pdy = -1;
+  else if (s === 'blink') blink = true;
+  return { pdx, pdy, blink };
+}
+
+/* ---------------- audio: bleeps + chiptune ---------------------------- */
+
+const Sfx = {
+  ctx: null, muted: false, musicTimer: null, musicStep: 0, nextNoteTime: 0,
+  ensure() {
+    if (!this.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return false;
+      this.ctx = new AC();
+    }
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    return true;
+  },
+  tone(freq, dur, type, vol, slideTo, when) {
+    if (this.muted || !this.ctx) return;
+    const t = when || this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(freq, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    g.gain.setValueAtTime(vol || 0.12, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.ctx.destination);
+    o.start(t); o.stop(t + dur + 0.02);
+  },
+  jump()   { this.tone(300, 0.16, 'square', 0.10, 620); },
+  djump()  { this.tone(420, 0.20, 'square', 0.10, 900); },
+  duck()   { this.tone(220, 0.08, 'sawtooth', 0.06, 120); },
+  coin()   { this.tone(1046, 0.07, 'square', 0.09); setTimeout(() => this.tone(1568, 0.14, 'square', 0.09), 60); },
+  power()  { [523,659,784,1046,1318].forEach((f,i)=>setTimeout(()=>this.tone(f,0.14,'triangle',0.12),i*70)); },
+  smash()  { this.tone(180, 0.2, 'sawtooth', 0.14, 60); this.tone(90, 0.25, 'square', 0.1, 40); },
+  crash()  { [392,370,349,330].forEach((f,i)=>setTimeout(()=>this.tone(f,0.32,'sawtooth',0.14),i*180)); },
+  chime()  { [330,415,494,659].forEach((f,i)=>setTimeout(()=>this.tone(f,0.9,'triangle',0.10),i*120)); },
+  // ------ music ------
+  LEAD: [523.25,659.25,783.99,659.25, 440,523.25,659.25,523.25, 349.23,440,523.25,440, 392,493.88,587.33,783.99],
+  BASS: [130.81,0,130.81,0, 110,0,110,0, 87.31,0,87.31,0, 98,0,98,0],
+  STEP_DUR: 60 / 140 / 2,
+  startMusic() {
+    if (!this.ctx || this.musicTimer) return;
+    this.musicStep = 0;
+    this.nextNoteTime = this.ctx.currentTime + 0.1;
+    this.musicTimer = setInterval(() => {
+      if (this.muted) return;
+      while (this.nextNoteTime < this.ctx.currentTime + 0.25) {
+        const i = this.musicStep % 16;
+        const lead = this.LEAD[i], bass = this.BASS[i];
+        if (lead) this.tone(lead, this.STEP_DUR * 0.9, 'triangle', 0.055, 0, this.nextNoteTime);
+        if (bass) this.tone(bass, this.STEP_DUR * 1.6, 'square', 0.045, 0, this.nextNoteTime);
+        this.musicStep++;
+        this.nextNoteTime += this.STEP_DUR;
+      }
+    }, 100);
+  },
+  stopMusic() {
+    if (this.musicTimer) { clearInterval(this.musicTimer); this.musicTimer = null; }
+  },
+  toggleMute() {
+    this.muted = !this.muted;
+    document.getElementById('trayVol').textContent = this.muted ? '🔇' : '🔊';
+    return this.muted;
+  },
+};
+
+/* ---------------- game state ------------------------------------------ */
+
+const STATE = { BOOT: 0, TITLE: 1, PLAY: 2, CRASH: 3, BSOD: 4 };
+
+function storageGet(key) {
+  try { return Number(localStorage.getItem(key) || 0); } catch (e) { return 0; }
+}
+function storageSet(key, val) {
+  try { localStorage.setItem(key, String(val)); } catch (e) { /* private mode */ }
+}
+
+const ZONES = [
+  'The Teal Desktop', 'Spreadsheet Canyon', 'Mail Merge Marshes',
+  'Dial-Up Dunes', 'Comic Sans Grove', 'The Blue Screen Badlands',
+  'Recycle Bin Abyss', 'System32 Catacombs', 'The Registry (Do Not Edit)',
+];
+
+const QUIPS = {
+  start:    "It looks like you're trying to survive. Would you like help with that?",
+  jump:     "Nice jump! I'm 78% sure that was intentional.",
+  duck:     "Ducking! A classic move since Windows 3.1.",
+  near:     ["That was close! Have you tried saving your work?",
+             "Whew! I felt that in my wire.",
+             "Careful! You only get one paperclip body."],
+  power:    "UNREGISTERED HYPERCLIP MODE!! (30-day trial)",
+  smash:    "It looks like that window stopped responding.",
+  floppy5:  "You've got floppy! That's 1.44 MB of pure skill.",
+  zone:     "Now entering: ",
+  milestone:"Achievement unlocked: WordArt privileges!",
+};
+
+const game = {
+  state: STATE.BOOT,
+  frame: 0,
+  bootT: 0,
+  crashT: 0,
+  speed: 4.2,
+  dist: 0,
+  score: 0,
+  floppies: 0,
+  hi: storageGet('clippy_hiscore'),
+  hiFloppy: storageGet('clippy_hifloppy'),
+  newHi: false,
+  zoneIdx: 0,
+  shake: 0,
+  paused: false,
+  obstacles: [],
+  coins: [],
+  particles: [],
+  nextSpawnX: 0,
+  bubbleText: '',
+  bubbleT: 0,
+  quipCooldown: 0,
+  flags: {},   // one-shot quip flags
+};
+
+const PXC = 2;                       // clippy pixel scale
+const clippyDraw = createClippyDrawer(ctx, PXC);
+const CLIP_W = 26 * PXC, CLIP_GRID_H = 38 * PXC;
+const CLIP_BODY_H = 64;              // visible rows 3..34 at PXC=2
+const CLIP_HIT_W = 26;               // forgiving hitbox
+
+const player = {
+  cx: 118,                 // bottom-center anchor x
+  bottomY: GROUND_Y,
+  vy: 0,
+  grounded: true,
+  jumps: 0,
+  ducking: false,
+  rot: 0,
+  spinning: false,
+  squashT: 0,
+  inv: 0,                  // invincibility frames remaining
+  trail: [],
+  // running-hop (his walk cycle IS the hop, straight from Clippy.tsx)
+  hopStep: 0, hopFrame: 0, hopWait: 0,
+  // eyes
+  seq: IDLE_SEQUENCES[0], seqIdx: 0, seqT: 0,
+};
+
+function resetRun() {
+  game.speed = 4.2; game.dist = 0; game.score = 0; game.floppies = 0;
+  game.zoneIdx = 0; game.newHi = false; game.shake = 0;
+  game.obstacles = []; game.coins = []; game.particles = [];
+  game.nextSpawnX = W + 220;
+  game.bubbleT = 0; game.quipCooldown = 0; game.flags = {};
+  player.bottomY = GROUND_Y; player.vy = 0; player.grounded = true;
+  player.jumps = 0; player.ducking = false; player.rot = 0;
+  player.spinning = false; player.inv = 0; player.trail = [];
+  player.hopStep = 0; player.hopFrame = 0; player.hopWait = 0;
+  say(QUIPS.start, 200);
+  setStatus('Running… don’t let the paperclip down.');
+}
+
+function say(text, frames) {
+  game.bubbleText = text;
+  game.bubbleT = frames || 160;
+}
+function quip(text) {
+  if (game.quipCooldown > 0) return;
+  game.quipCooldown = 320;
+  say(text, 150);
+}
+function setStatus(msg) { document.getElementById('statusMsg').textContent = msg; }
+
+/* ---------------- parallax scenery ------------------------------------ */
+
+const clouds = [];
+for (let i = 0; i < 7; i++) {
+  clouds.push({ x: (i * 137 + 40) % 760, y: 34 + (i * 53) % 90, s: 0.7 + ((i * 37) % 10) / 12 });
+}
+
+// horizon "buildings" made of literal windows
+const buildings = [];
+{
+  let bx = 0;
+  while (bx < 900) {
+    const bw = 58 + (bx * 7) % 46;
+    const bh = 55 + (bx * 13) % 85;
+    buildings.push({ x: bx, w: bw, h: bh });
+    bx += bw + 14 + (bx * 11) % 30;
+  }
+}
+const BUILD_SPAN = 960;
+
+// scanline overlay, pre-rendered once
+const scanCanvas = document.createElement('canvas');
+scanCanvas.width = W; scanCanvas.height = H;
+{
+  const sc = scanCanvas.getContext('2d');
+  sc.fillStyle = 'rgba(0,0,0,0.05)';
+  for (let y = 0; y < H; y += 3) sc.fillRect(0, y, W, 1);
+}
+
+function drawCloud(x, y, s) {
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x, y + 6*s, 46*s, 10*s);
+  ctx.fillRect(x + 8*s, y, 22*s, 10*s);
+  ctx.fillRect(x + 26*s, y + 3*s, 16*s, 8*s);
+  ctx.fillStyle = '#d8e8e8';
+  ctx.fillRect(x, y + 13*s, 46*s, 3*s);
+}
+
+function drawScenery() {
+  // teal sky
+  ctx.fillStyle = '#008080';
+  ctx.fillRect(0, 0, W, H);
+  // sun: a beveled gray "button" sun, because everything is a widget in 1997
+  ctx.fillStyle = '#c0c0c0'; ctx.fillRect(540, 40, 44, 44);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(540, 40, 44, 2); ctx.fillRect(540, 40, 2, 44);
+  ctx.fillStyle = '#808080'; ctx.fillRect(540, 82, 44, 2); ctx.fillRect(582, 40, 2, 44);
+  ctx.fillStyle = '#ffe66e'; ctx.fillRect(548, 48, 28, 28);
+
+  // clouds
+  const cOff = (game.dist * 0.15) % 760;
+  for (const cl of clouds) {
+    let x = cl.x - cOff;
+    if (x < -80) x += 760;
+    drawCloud(x, cl.y, cl.s);
+  }
+
+  // window-buildings on the horizon
+  const bOff = (game.dist * 0.4) % BUILD_SPAN;
+  for (let rep = 0; rep < 2; rep++) {
+    for (const b of buildings) {
+      const x = b.x - bOff + rep * BUILD_SPAN;
+      if (x > W || x + b.w < 0) continue;
+      const top = GROUND_Y - b.h;
+      ctx.fillStyle = '#9a9aa2'; ctx.fillRect(x, top, b.w, b.h);
+      ctx.fillStyle = '#b8b8c0'; ctx.fillRect(x, top, b.w, 2); ctx.fillRect(x, top, 2, b.h);
+      ctx.fillStyle = '#5a5a62'; ctx.fillRect(x, top + b.h - 2, b.w, 2);
+      ctx.fillStyle = '#31318c'; ctx.fillRect(x + 3, top + 3, b.w - 6, 7);
+      ctx.fillStyle = '#83839a';
+      for (let wy = top + 14; wy < GROUND_Y - 8; wy += 12) {
+        for (let wx = x + 5; wx < x + b.w - 8; wx += 12) {
+          ctx.fillRect(wx, wy, 7, 7);
+        }
+      }
+    }
+  }
+
+  // the ground is an endless taskbar
+  ctx.fillStyle = '#c0c0c0'; ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, GROUND_Y, W, 2);
+  ctx.fillStyle = '#dfdfdf'; ctx.fillRect(0, GROUND_Y + 2, W, 1);
+  // scrolling "task buttons" embedded in the ground
+  const labels = ['Document1 - Word', 'Untitled - Paint', 'Solitaire', 'FreeCell', 'A:\\ not ready', 'Inbox - Outlook', 'DOOM.EXE', 'winmine.exe'];
+  const gOff = game.dist % 1200;
+  ctx.font = 'bold 9px monospace';
+  for (let i = 0; i < 8; i++) {
+    let x = i * 150 - gOff;
+    if (x < -140) x += 1200;
+    if (x > W) continue;
+    ctx.fillStyle = '#b0b0b0'; ctx.fillRect(x, GROUND_Y + 8, 120, 18);
+    ctx.fillStyle = '#808080'; ctx.fillRect(x, GROUND_Y + 8, 120, 1); ctx.fillRect(x, GROUND_Y + 8, 1, 18);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(x, GROUND_Y + 25, 120, 1); ctx.fillRect(x + 119, GROUND_Y + 8, 1, 18);
+    ctx.fillStyle = '#404040';
+    ctx.fillText(labels[i], x + 6, GROUND_Y + 20);
+  }
+}
+
+/* ---------------- obstacle + pickup drawing ---------------------------- */
+
+function bevelRect(x, y, w, h, raised) {
+  ctx.fillStyle = '#c0c0c0'; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = raised ? '#ffffff' : '#404040';
+  ctx.fillRect(x, y, w, 2); ctx.fillRect(x, y, 2, h);
+  ctx.fillStyle = raised ? '#404040' : '#ffffff';
+  ctx.fillRect(x, y + h - 2, w, 2); ctx.fillRect(x + w - 2, y, 2, h);
+}
+
+function drawDialog(o) {
+  const { x, y, w, h } = o;
+  bevelRect(x, y, w, h, true);
+  // title bar
+  ctx.fillStyle = '#000080'; ctx.fillRect(x + 3, y + 3, w - 6, 13);
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 9px monospace';
+  ctx.fillText(o.title || 'Error', x + 6, y + 13);
+  // close button
+  ctx.fillStyle = '#c0c0c0'; ctx.fillRect(x + w - 15, y + 5, 10, 9);
+  ctx.fillStyle = '#000000'; ctx.font = 'bold 8px monospace';
+  ctx.fillText('x', x + w - 12, y + 12);
+  // red error icon
+  ctx.fillStyle = '#cc0000';
+  ctx.beginPath(); ctx.arc(x + 15, y + 27, 7, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 10px monospace';
+  ctx.fillText('X', x + 12, y + 31);
+  // fake text lines
+  ctx.fillStyle = '#707070';
+  for (let ly = 0; ly < 2; ly++) ctx.fillRect(x + 27, y + 23 + ly * 6, w - 40, 3);
+  // OK button
+  if (h >= 46) {
+    const bw = 34;
+    bevelRect(x + (w - bw) / 2, y + h - 18, bw, 13, true);
+    ctx.fillStyle = '#000000'; ctx.font = 'bold 8px monospace';
+    ctx.fillText('OK', x + w / 2 - 6, y + h - 8);
+  }
+}
+
+function drawBin(o) {
+  const { x, y, w, h } = o;
+  // silver recycle bin
+  ctx.fillStyle = '#c8ccd4';
+  ctx.beginPath();
+  ctx.moveTo(x + 3, y + 6); ctx.lineTo(x + w - 3, y + 6);
+  ctx.lineTo(x + w - 7, y + h); ctx.lineTo(x + 7, y + h);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#9aa0ac';
+  for (let sx = x + 9; sx < x + w - 8; sx += 6) ctx.fillRect(sx, y + 9, 2, h - 12);
+  // rim
+  ctx.fillStyle = '#e4e8ee'; ctx.fillRect(x, y + 2, w, 6);
+  ctx.fillStyle = '#7a8090'; ctx.fillRect(x, y + 7, w, 2);
+  // recycle arrows
+  ctx.fillStyle = '#1a7a2a'; ctx.font = 'bold 14px monospace';
+  ctx.fillText('♻', x + w / 2 - 7, y + h / 2 + 7);
+  // crumpled paper sticking out
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x + 6, y - 3, 7, 6); ctx.fillRect(x + w - 14, y - 4, 8, 7);
+}
+
+function drawBsodWall(o) {
+  const { x, y, w, h } = o;
+  ctx.fillStyle = '#0000aa'; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y, 1, h);
+  ctx.fillRect(x + w - 1, y, 1, h); ctx.fillRect(x, y + h - 1, w, 1);
+  // inverted "Windows" strip
+  ctx.fillStyle = '#aaaaaa'; ctx.fillRect(x + 5, y + 6, w - 10, 8);
+  ctx.fillStyle = '#0000aa'; ctx.font = 'bold 7px monospace'; ctx.fillText(':(', x + w/2 - 4, y + 13);
+  // gibberish
+  ctx.fillStyle = '#ccccff';
+  for (let ly = y + 20; ly < y + h - 8; ly += 7) {
+    ctx.fillRect(x + 5, ly, (w - 10) * (0.5 + ((ly * 7) % 5) / 10), 2);
+  }
+}
+
+function drawBanner(o) {
+  const { x, w, h } = o;
+  const y = o.y + Math.sin(game.frame * 0.08 + x * 0.01) * 3;
+  const flash = Math.floor(game.frame / 12) % 2 === 0;
+  ctx.fillStyle = flash ? '#ffff00' : '#ff40ff';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = flash ? '#ff0000' : '#0000ff';
+  ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+  ctx.fillStyle = flash ? '#ff0000' : '#000080';
+  ctx.font = 'bold 10px monospace';
+  ctx.fillText(o.adText, x + 8, y + 12);
+  ctx.font = 'bold 7px monospace';
+  ctx.fillText('>> CLICK HERE <<', x + w/2 - 32, y + h - 5);
+  o.hitY = y;   // hitbox follows the wobble
+}
+
+function drawHourglass(o) {
+  const x = o.x, y = o.hitY;
+  const flap = Math.floor(game.frame / 6) % 2 === 0;
+  // wings
+  ctx.fillStyle = '#f4f4ff';
+  if (flap) { ctx.fillRect(x - 9, y + 2, 9, 5); ctx.fillRect(x + 18, y + 2, 9, 5); }
+  else      { ctx.fillRect(x - 9, y + 7, 9, 5); ctx.fillRect(x + 18, y + 7, 9, 5); }
+  // frame
+  ctx.fillStyle = '#8a5a20'; ctx.fillRect(x, y, 18, 3); ctx.fillRect(x, y + 19, 18, 3);
+  // glass
+  ctx.fillStyle = '#d8ecff';
+  ctx.beginPath(); ctx.moveTo(x + 2, y + 3); ctx.lineTo(x + 16, y + 3); ctx.lineTo(x + 9, y + 11); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x + 9, y + 11); ctx.lineTo(x + 16, y + 19); ctx.lineTo(x + 2, y + 19); ctx.closePath(); ctx.fill();
+  // sand
+  ctx.fillStyle = '#ffd24a';
+  ctx.fillRect(x + 6, y + 4, 6, 3);
+  ctx.fillRect(x + 5, y + 15, 8, 4);
+  ctx.fillRect(x + 8, y + 10, 2, 6);
+}
+
+function drawFloppy(cn) {
+  const bob = Math.sin(game.frame * 0.1 + cn.x * 0.05) * 3;
+  const x = cn.x, y = cn.y + bob;
+  ctx.fillStyle = '#2c3ea8'; ctx.fillRect(x, y, 14, 15);
+  ctx.fillStyle = '#4a5cc8'; ctx.fillRect(x, y, 14, 2);
+  ctx.fillStyle = '#c8c8d4'; ctx.fillRect(x + 4, y, 8, 6);      // shutter
+  ctx.fillStyle = '#404050'; ctx.fillRect(x + 9, y + 1, 2, 4);  // slot
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(x + 2, y + 8, 10, 6); // label
+  ctx.fillStyle = '#9090a0'; ctx.fillRect(x + 3, y + 10, 8, 1); ctx.fillRect(x + 3, y + 12, 6, 1);
+}
+
+function drawCD(cn) {
+  const bob = Math.sin(game.frame * 0.09) * 4;
+  const cx = cn.x + 11, cy = cn.y + 11 + bob;
+  ctx.fillStyle = '#e0e0ea';
+  ctx.beginPath(); ctx.arc(cx, cy, 11, 0, Math.PI * 2); ctx.fill();
+  for (let i = 0; i < 6; i++) {
+    ctx.strokeStyle = 'hsla(' + ((game.frame * 3 + i * 60) % 360) + ',90%,60%,0.75)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, 8, i * 1.05 + game.frame * 0.05, i * 1.05 + 0.7 + game.frame * 0.05); ctx.stroke();
+  }
+  ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#a0a0b0'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.stroke();
+}
+
+/* ---------------- spawning -------------------------------------------- */
+
+function rnd(a, b) { return a + Math.random() * (b - a); }
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+const AD_TEXTS = ['FREE RAM!!!', 'HOT SINGLES BSODs', 'WIN A 56K MODEM', 'Y2K INSURANCE', 'PUNCH THE MOUSE'];
+const DLG_TITLES = ['Error', 'Fatal Error', 'Warning!', 'Illegal Op.', 'Abort/Retry', 'General Fail'];
+
+function spawnObstacle(x) {
+  const d = game.dist;
+  const pool = [];
+  pool.push('dialog', 'dialog', 'bin');
+  if (d > 500)  pool.push('banner');
+  if (d > 900)  pool.push('hourglass', 'hourglass');
+  if (d > 1400) pool.push('bsod', 'stack');
+  const type = pick(pool);
+
+  if (type === 'dialog') {
+    const w = rnd(62, 92), h = rnd(42, 62);
+    game.obstacles.push({ type, x, y: GROUND_Y - h, w, h, title: pick(DLG_TITLES), smashable: true });
+  } else if (type === 'stack') {
+    const w = rnd(66, 80), h1 = rnd(38, 46), h2 = rnd(30, 40);
+    game.obstacles.push({ type: 'dialog', x, y: GROUND_Y - h1, w, h: h1, title: pick(DLG_TITLES), smashable: true });
+    game.obstacles.push({ type: 'dialog', x: x + 8, y: GROUND_Y - h1 - h2, w: w - 16, h: h2, title: 'Error', smashable: true });
+  } else if (type === 'bin') {
+    const w = 34, h = 42;
+    game.obstacles.push({ type, x, y: GROUND_Y - h, w, h, smashable: true });
+  } else if (type === 'bsod') {
+    const w = 30, h = 80;
+    game.obstacles.push({ type, x, y: GROUND_Y - h, w, h, smashable: true });
+  } else if (type === 'banner') {
+    const w = rnd(110, 150), h = 26;
+    game.obstacles.push({ type, x, y: GROUND_Y - 72, hitY: GROUND_Y - 72, w, h, smashable: true });
+  } else if (type === 'hourglass') {
+    const baseY = GROUND_Y - rnd(100, 155);
+    game.obstacles.push({ type, x, y: baseY, hitY: baseY, w: 18, h: 22, baseY, amp: rnd(8, 16), ph: Math.random() * 6, smashable: true });
+  }
+}
+
+function spawnCoins(x) {
+  const style = Math.random();
+  if (style < 0.5) {
+    // straight row
+    const y = GROUND_Y - pick([44, 100, 150]);
+    const n = 4 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) game.coins.push({ kind: 'floppy', x: x + i * 24, y, w: 14, h: 15 });
+  } else {
+    // arc
+    const n = 6;
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);
+      const y = GROUND_Y - 50 - Math.sin(t * Math.PI) * 95;
+      game.coins.push({ kind: 'floppy', x: x + i * 26, y, w: 14, h: 15 });
+    }
+  }
+  if (game.dist > 700 && Math.random() < 0.16) {
+    game.coins.push({ kind: 'cd', x: x + 90, y: GROUND_Y - 172, w: 22, h: 22 });
+  }
+}
+
+function updateSpawner() {
+  if (game.dist < game.nextSpawnX) return;
+  const sx = W + 40;
+  if (Math.random() < 0.72) spawnObstacle(sx);
+  else spawnCoins(sx);
+  const speedFactor = Math.pow(game.speed / 4.2, 0.5);
+  game.nextSpawnX = game.dist + rnd(240, 460) * speedFactor;
+}
+
+/* ---------------- particles ------------------------------------------- */
+
+function burst(x, y, colors, n, force) {
+  for (let i = 0; i < n; i++) {
+    game.particles.push({
+      x, y,
+      vx: rnd(-1, 1) * (force || 3), vy: rnd(-1.2, -0.1) * (force || 3) * 1.6,
+      s: rnd(2, 5), life: rnd(24, 50), c: pick(colors),
+    });
+  }
+}
+
+function updateParticles() {
+  for (const p of game.particles) {
+    p.x += p.vx; p.y += p.vy; p.vy += 0.18; p.life--;
+  }
+  game.particles = game.particles.filter(p => p.life > 0 && p.y < H + 10);
+}
+
+function drawParticles() {
+  for (const p of game.particles) {
+    ctx.globalAlpha = Math.min(1, p.life / 20);
+    ctx.fillStyle = p.c;
+    ctx.fillRect(p.x, p.y, p.s, p.s);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ---------------- player ---------------------------------------------- */
+
+const input = { jumpHeld: false };
+
+function tryJump() {
+  if (game.state === STATE.TITLE) { startRun(); return; }
+  if (game.state === STATE.BSOD && game.crashT > 90) { startRun(); return; }
+  if (game.state !== STATE.PLAY) return;
+  if (player.ducking) return;
+  if (player.grounded) {
+    player.vy = -10.6; player.grounded = false; player.jumps = 1;
+    Sfx.jump();
+    if (!game.flags.jump) { game.flags.jump = true; quip(QUIPS.jump); }
+  } else if (player.jumps === 1) {
+    player.vy = -9.4; player.jumps = 2;
+    player.spinning = true; player.rot = 0;
+    Sfx.djump();
+  }
+}
+
+function setDuck(on) {
+  if (game.state !== STATE.PLAY) return;
+  if (on && !player.ducking) {
+    player.ducking = true;
+    if (!player.grounded) player.vy = Math.max(player.vy, 7); // fast-fall
+    Sfx.duck();
+    if (!game.flags.duck) { game.flags.duck = true; quip(QUIPS.duck); }
+  } else if (!on) {
+    player.ducking = false;
+  }
+}
+
+function playerBox() {
+  const sy = player.ducking ? 0.55 : 1;
+  const h = CLIP_BODY_H * sy - 6;
+  return { x: player.cx - CLIP_HIT_W / 2, y: player.bottomY - h, w: CLIP_HIT_W, h };
+}
+
+function updatePlayer() {
+  // physics
+  if (!player.grounded) {
+    player.vy += 0.55;
+    if (!input.jumpHeld && player.vy < -4) player.vy = -4;  // jump cut
+    player.bottomY += player.vy;
+    if (player.bottomY >= GROUND_Y) {
+      player.bottomY = GROUND_Y;
+      player.grounded = true; player.jumps = 0;
+      player.spinning = false; player.rot = 0;
+      player.squashT = 8;
+      player.hopStep = 0; player.hopFrame = 0; player.hopWait = 0;
+    }
+    if (player.spinning) {
+      player.rot += 0.22;
+      if (player.rot >= Math.PI * 2) { player.rot = 0; player.spinning = false; }
+    }
+  } else {
+    // signature run: cycle the original HOP_PATTERN
+    if (player.hopWait > 0) player.hopWait--;
+    else {
+      player.hopFrame++;
+      if (player.hopFrame >= 2) {
+        player.hopFrame = 0;
+        player.hopStep++;
+        if (player.hopStep >= HOP_PATTERN.length) { player.hopStep = 0; player.hopWait = 6; }
+      }
+    }
+  }
+  if (player.squashT > 0) player.squashT--;
+  if (player.inv > 0) {
+    player.inv--;
+    player.trail.push({ x: player.cx, y: player.bottomY, t: 16 });
+  }
+  for (const tr of player.trail) tr.t--;
+  player.trail = player.trail.filter(t => t.t > 0);
+
+  // eyes
+  player.seqT++;
+  if (player.seqT >= player.seq[player.seqIdx].d) {
+    player.seqT = 0;
+    player.seqIdx++;
+    if (player.seqIdx >= player.seq.length) {
+      player.seqIdx = 0;
+      player.seq = IDLE_SEQUENCES[Math.floor(Math.random() * IDLE_SEQUENCES.length)];
+    }
+  }
+}
+
+function currentEyes() {
+  // context-aware overrides on top of the idle sequences
+  if (game.state === STATE.PLAY) {
+    if (!player.grounded && player.vy < -1) return { pdx: 0, pdy: -1, blink: false };
+    const near = game.obstacles.some(o => o.x > player.cx && o.x < player.cx + 130);
+    const base = resolveEyeState(player.seq[player.seqIdx].s);
+    if (near && !base.blink) return { pdx: 1, pdy: 0, blink: false };
+    return base;
+  }
+  return resolveEyeState(player.seq[player.seqIdx].s);
+}
+
+function drawPlayer() {
+  // rainbow ghost trail while invincible
+  for (const tr of player.trail) {
+    ctx.globalAlpha = tr.t / 40;
+    ctx.fillStyle = 'hsl(' + ((tr.t * 40 + game.frame * 9) % 360) + ',95%,60%)';
+    ctx.fillRect(tr.x - 12, tr.y - 50, 24, 46);
+  }
+  ctx.globalAlpha = 1;
+
+  const hop = player.grounded && game.state === STATE.PLAY ? HOP_PATTERN[player.hopStep] * 2 : 0;
+  let sx = 1, sy = 1;
+  if (player.ducking) { sx = 1.25; sy = 0.55; }
+  else if (player.squashT > 0) { sx = 1 + player.squashT * 0.02; sy = 1 - player.squashT * 0.02; }
+
+  if (player.inv > 0 && player.inv < 90 && Math.floor(game.frame / 5) % 2 === 0) {
+    // blink warning as the power-up runs out — skip a frame
+  }
+
+  ctx.save();
+  ctx.translate(player.cx, player.bottomY + hop);
+  ctx.rotate(player.rot);
+  ctx.scale(sx, sy);
+  ctx.translate(-13 * PXC, -35 * PXC);
+  if (player.inv > 0) {
+    ctx.shadowColor = 'hsl(' + ((game.frame * 12) % 360) + ',100%,60%)';
+    ctx.shadowBlur = 10;
+  }
+  const eyes = currentEyes();
+  clippyDraw.drawBody();
+  clippyDraw.drawEyes(eyes.pdx, eyes.pdy, eyes.blink);
+  ctx.restore();
+  ctx.shadowBlur = 0;
+}
+
+/* ---------------- collisions ------------------------------------------ */
+
+function overlap(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function obstacleBox(o) {
+  const y = (o.type === 'banner' || o.type === 'hourglass') ? o.hitY : o.y;
+  return { x: o.x + 3, y: y + 3, w: o.w - 6, h: o.h - 5 };
+}
+
+function updateWorld() {
+  game.dist += game.speed;
+  game.score += game.speed * 0.12;
+  game.speed = Math.min(9.5, game.speed + 0.0001 * game.speed);
+  if (game.quipCooldown > 0) game.quipCooldown--;
+  if (game.bubbleT > 0) game.bubbleT--;
+
+  // zone announcements
+  const zi = Math.min(ZONES.length - 1, Math.floor(game.score / 1500));
+  if (zi > game.zoneIdx) {
+    game.zoneIdx = zi;
+    say(QUIPS.zone + ZONES[zi] + '!', 150);
+    Sfx.power();
+  }
+
+  updateSpawner();
+
+  const pbox = playerBox();
+
+  // obstacles
+  for (const o of game.obstacles) {
+    o.x -= game.speed;
+    if (o.type === 'hourglass') {
+      o.hitY = o.baseY + Math.sin(game.frame * 0.06 + o.ph) * o.amp;
+    }
+    const box = obstacleBox(o);
+    if (!o.dead && overlap(pbox, box)) {
+      if (player.inv > 0) {
+        o.dead = true;
+        game.score += 50;
+        burst(o.x + o.w / 2, box.y + box.h / 2, ['#c0c0c0', '#ffffff', '#000080', '#0000aa'], 16, 4);
+        game.shake = 8;
+        Sfx.smash();
+        quip(QUIPS.smash);
+      } else {
+        crash();
+        return;
+      }
+    }
+    // near-miss tracking
+    if (!o.dead && !o.passed && o.x + o.w < pbox.x) {
+      o.passed = true;
+      const vGap = Math.min(Math.abs(pbox.y - (box.y + box.h)), Math.abs(box.y - (pbox.y + pbox.h)));
+      if (o.grazed || vGap < 16) quip(pick(QUIPS.near));
+    }
+    if (!o.dead && !o.passed && box.x < pbox.x + pbox.w && box.x + box.w > pbox.x) {
+      const vGap = Math.min(Math.abs(pbox.y - (box.y + box.h)), Math.abs(box.y - (pbox.y + pbox.h)));
+      if (vGap < 14) o.grazed = true;
+    }
+  }
+  game.obstacles = game.obstacles.filter(o => !o.dead && o.x + o.w > -60);
+
+  // coins
+  for (const cn of game.coins) {
+    cn.x -= game.speed;
+    if (!cn.taken && overlap(pbox, cn)) {
+      cn.taken = true;
+      if (cn.kind === 'floppy') {
+        game.floppies++;
+        game.score += 25;
+        burst(cn.x + 7, cn.y + 7, ['#ffe66e', '#ffffff', '#4a5cc8'], 6, 2);
+        Sfx.coin();
+        if (game.floppies === 5) quip(QUIPS.floppy5);
+      } else {
+        player.inv = 60 * 6;
+        game.score += 100;
+        burst(cn.x + 11, cn.y + 11, ['#ff4040', '#ffe66e', '#40ff70', '#40a0ff', '#e040ff'], 22, 3);
+        Sfx.power();
+        say(QUIPS.power, 160);
+      }
+    }
+  }
+  game.coins = game.coins.filter(c => !c.taken && c.x + c.w > -40);
+
+  updateParticles();
+  if (game.shake > 0) game.shake--;
+}
+
+function crash() {
+  game.state = STATE.CRASH;
+  game.crashT = 0;
+  game.shake = 14;
+  burst(player.cx, player.bottomY - 30, ['#c0c0c0', '#dcdce4', '#78787f', '#ffffff'], 26, 4);
+  Sfx.stopMusic();
+  Sfx.crash();
+  if (game.score > game.hi) {
+    game.hi = Math.floor(game.score);
+    game.newHi = true;
+    storageSet('clippy_hiscore', game.hi);
+  }
+  if (game.floppies > game.hiFloppy) {
+    game.hiFloppy = game.floppies;
+    storageSet('clippy_hifloppy', game.hiFloppy);
+  }
+  setStatus('CLIPPY.EXE has performed an illegal operation.');
+}
+
+/* ---------------- HUD / bubble ----------------------------------------- */
+
+function pad(n, len) { return String(Math.floor(n)).padStart(len, '0'); }
+
+function drawHUD() {
+  ctx.fillStyle = '#c0c0c0'; ctx.fillRect(0, 0, W, HUD_H);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, 1);
+  ctx.fillStyle = '#808080'; ctx.fillRect(0, HUD_H - 2, W, 1);
+  ctx.fillStyle = '#404040'; ctx.fillRect(0, HUD_H - 1, W, 1);
+
+  const panel = (x, w, text, color) => {
+    ctx.fillStyle = '#808080'; ctx.fillRect(x, 3, w, 1); ctx.fillRect(x, 3, 1, 16);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(x, 18, w, 1); ctx.fillRect(x + w - 1, 3, 1, 16);
+    ctx.fillStyle = '#d4d4d4'; ctx.fillRect(x + 1, 4, w - 2, 14);
+    ctx.fillStyle = color || '#000000';
+    ctx.font = 'bold 10px monospace';
+    ctx.fillText(text, x + 6, 14);
+  };
+  panel(6, 130, 'SCORE ' + pad(game.score, 6));
+  panel(142, 116, 'HI ' + pad(game.hi, 6), '#000080');
+  panel(264, 76, '💾 x ' + game.floppies);
+  panel(346, 168, ZONES[Math.min(game.zoneIdx, ZONES.length - 1)], '#404040');
+  if (player.inv > 0) panel(520, 70, 'HYPER!', 'hsl(' + ((game.frame * 12) % 360) + ',90%,40%)');
+  else if (Sfx.muted) panel(520, 70, 'MUTED', '#a00000');
+}
+
+function wrapText(text, maxW) {
+  const words = text.split(' ');
+  const lines = [];
+  let line = '';
+  for (const w2 of words) {
+    const test = line ? line + ' ' + w2 : w2;
+    if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w2; }
+    else line = test;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function drawBubble() {
+  if (game.bubbleT <= 0 || !game.bubbleText) return;
+  ctx.font = '10px monospace';
+  const maxW = 210;
+  const lines = wrapText(game.bubbleText, maxW);
+  const bw = Math.min(maxW, Math.max(...lines.map(l => ctx.measureText(l).width))) + 20;
+  const bh = lines.length * 12 + 14;
+  const bx = player.cx + 30, by = GROUND_Y - CLIP_BODY_H - bh - 26;
+  ctx.globalAlpha = Math.min(1, game.bubbleT / 15);
+  ctx.fillStyle = '#ffffcc';
+  ctx.strokeStyle = '#000000'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 6); else ctx.rect(bx, by, bw, bh);
+  ctx.fill(); ctx.stroke();
+  // tail
+  ctx.beginPath();
+  ctx.moveTo(bx + 12, by + bh); ctx.lineTo(bx + 2, by + bh + 12); ctx.lineTo(bx + 26, by + bh);
+  ctx.closePath();
+  ctx.fillStyle = '#ffffcc'; ctx.fill();
+  ctx.strokeStyle = '#000000';
+  ctx.beginPath(); ctx.moveTo(bx + 12, by + bh); ctx.lineTo(bx + 2, by + bh + 12); ctx.lineTo(bx + 26, by + bh); ctx.stroke();
+  ctx.fillStyle = '#ffffcc'; ctx.fillRect(bx + 13, by + bh - 1, 12, 2);
+  ctx.fillStyle = '#000000';
+  lines.forEach((l, i) => ctx.fillText(l, bx + 10, by + 16 + i * 12));
+  ctx.globalAlpha = 1;
+}
+
+/* ---------------- screens ---------------------------------------------- */
+
+const BOOT_LINES = [
+  { t: 0,   s: 'PaperClip BIOS v4.02   (C) 1997 Paperclip Interactive' },
+  { t: 26,  s: 'CPU: Intel 486DX2-66 ... OK' },
+  { t: 46,  s: 'Memory Test: 640K ... OK  (should be enough for anybody)' },
+  { t: 72,  s: 'Detecting drives: A:\\ 3.5" floppy ... C:\\ 528MB ... OK' },
+  { t: 98,  s: 'Mouse detected on COM1. It has a ball. Clean it.' },
+  { t: 124, s: '' },
+  { t: 126, s: 'Starting MS-DOS...' },
+  { t: 152, s: 'C:\\> CLIPPY.EXE /epic' },
+];
+const BOOT_BAR_T = 176, BOOT_DONE_T = 260;
+
+function drawBoot() {
+  ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, W, H);
+  ctx.font = '12px monospace';
+  ctx.fillStyle = '#c0c0c0';
+  let ly = 34;
+  for (const line of BOOT_LINES) {
+    if (game.bootT >= line.t) {
+      const age = game.bootT - line.t;
+      const chars = Math.min(line.s.length, Math.ceil(age * 1.6));
+      ctx.fillText(line.s.slice(0, chars), 26, ly);
+    }
+    ly += 20;
+  }
+  if (game.bootT >= BOOT_BAR_T) {
+    ctx.fillStyle = '#c0c0c0';
+    ctx.fillText('Loading Office Assistant', 26, ly + 14);
+    const prog = Math.min(1, (game.bootT - BOOT_BAR_T) / (BOOT_DONE_T - BOOT_BAR_T - 14));
+    ctx.strokeStyle = '#c0c0c0'; ctx.lineWidth = 1;
+    ctx.strokeRect(26, ly + 24, 300, 14);
+    ctx.fillStyle = '#000080';
+    const blocks = Math.floor(prog * 18);
+    for (let i = 0; i < blocks; i++) ctx.fillRect(29 + i * 16.4, ly + 27, 13, 8);
+  }
+  if (Math.floor(game.bootT / 16) % 2 === 0) {
+    ctx.fillStyle = '#c0c0c0';
+    ctx.fillText('_', 26, ly + 70);
+  }
+  ctx.font = '10px monospace';
+  ctx.fillStyle = '#606060';
+  ctx.fillText('Press any key to skip', W - 150, H - 12);
+
+  game.bootT++;
+  if (game.bootT >= BOOT_DONE_T) enterTitle();
+}
+
+function enterTitle() {
+  game.state = STATE.TITLE;
+  game.dist = 0;
+  Sfx.chime();
+  setStatus('Ready. It looks like you’re trying to play a game.');
+}
+
+function drawTitle() {
+  game.dist += 1.1;   // slow scenic drift
+  drawScenery();
+
+  // Clippy standing on the taskbar, doing his idle thing
+  player.bottomY = GROUND_Y;
+  ctx.save();
+  ctx.translate(player.cx, player.bottomY + (Math.floor(game.frame / 40) % 5 === 0 ? HOP_PATTERN[Math.floor(game.frame / 3) % 10] * 2 : 0));
+  ctx.translate(-13 * PXC, -35 * PXC);
+  const eyes = currentEyes();
+  clippyDraw.drawBody();
+  clippyDraw.drawEyes(eyes.pdx, eyes.pdy, eyes.blink);
+  ctx.restore();
+
+  // big title with hard 3D shadow
+  ctx.font = 'bold 44px monospace';
+  ctx.fillStyle = '#000060'; ctx.fillText('CLIPPY.EXE', 158, 88);
+  ctx.fillStyle = '#ffffff'; ctx.fillText('CLIPPY.EXE', 154, 84);
+  ctx.font = 'bold 12px monospace';
+  ctx.fillStyle = '#ffe66e';
+  ctx.fillText('THE OFFICE ASSISTANT STRIKES BACK', 190, 106);
+
+  // welcome dialog
+  const dx = 200, dy = 130, dw = 320, dh = 118;
+  bevelRect(dx, dy, dw, dh, true);
+  ctx.fillStyle = '#000080'; ctx.fillRect(dx + 3, dy + 3, dw - 6, 14);
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 10px monospace';
+  ctx.fillText('Welcome', dx + 7, dy + 14);
+  ctx.fillStyle = '#000000'; ctx.font = '11px monospace';
+  ctx.fillText('It looks like you’re trying to have', dx + 14, dy + 36);
+  ctx.fillText('fun in 1997.', dx + 14, dy + 50);
+  ctx.fillText('Would you like help with that?', dx + 14, dy + 68);
+  bevelRect(dx + 60, dy + 82, 84, 20, true);
+  bevelRect(dx + 172, dy + 82, 84, 20, true);
+  ctx.fillStyle = '#000000'; ctx.font = 'bold 10px monospace';
+  ctx.fillText('Yes', dx + 91, dy + 96);
+  ctx.fillText('Absolutely', dx + 184, dy + 96);
+
+  ctx.fillStyle = 'rgba(0,0,60,0.55)';
+  ctx.fillRect(70, 264, 500, 54);
+  if (Math.floor(game.frame / 24) % 2 === 0) {
+    ctx.font = 'bold 13px monospace';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('>> PRESS ENTER OR CLICK TO START <<', 176, 280);
+  }
+  ctx.font = '10px monospace';
+  ctx.fillStyle = '#e0f0f0';
+  ctx.fillText('SPACE/↑ jump (press twice to double-jump)   ↓ duck   P pause   M mute', 82, 298);
+  if (game.hi > 0) {
+    ctx.fillStyle = '#ffe66e';
+    ctx.fillText('HIGH SCORE: ' + pad(game.hi, 6) + '   BEST FLOPPY HAUL: ' + game.hiFloppy, 190, 312);
+  }
+}
+
+function startRun() {
+  resetRun();
+  game.state = STATE.PLAY;
+  Sfx.ensure();
+  Sfx.startMusic();
+}
+
+const BSOD_GIBBERISH = 'An exception 0E has occurred at 0028:C0DEBA5E in VxD CLIPPY(01) + 000010E4. The current application, YOUR HOPES AND DREAMS, will be terminated.';
+
+function drawCrashAndBsod() {
+  if (game.crashT < 45) {
+    // frozen world with shards flying
+    drawScenery();
+    for (const o of game.obstacles) drawObstacle(o);
+    for (const cn of game.coins) drawCollectible(cn);
+    drawParticles();
+    updateParticles();
+    drawPlayer();
+    drawHUD();
+    // glitch rectangles — window ghosting
+    for (let i = 0; i < 3; i++) {
+      const gx = (game.crashT * 37 + i * 211) % W, gy = (game.crashT * 53 + i * 97) % (H - 60);
+      ctx.fillStyle = 'rgba(192,192,192,0.5)';
+      ctx.fillRect(gx, gy, 90, 60);
+      ctx.fillStyle = 'rgba(0,0,128,0.5)';
+      ctx.fillRect(gx, gy, 90, 8);
+    }
+    game.crashT++;
+    if (game.crashT === 45) game.state = STATE.BSOD;
+    return;
+  }
+}
+
+function drawBsod() {
+  game.crashT++;
+  ctx.fillStyle = '#0000aa'; ctx.fillRect(0, 0, W, H);
+  ctx.font = 'bold 13px monospace';
+  // inverted header
+  const head = ' CLIPPY ';
+  const hw = ctx.measureText(head).width;
+  ctx.fillStyle = '#aaaaaa'; ctx.fillRect((W - hw) / 2, 44, hw, 18);
+  ctx.fillStyle = '#0000aa'; ctx.fillText(head, (W - hw) / 2, 58);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '12px monospace';
+  const lines = wrapText(BSOD_GIBBERISH, 520);
+  let ly = 96;
+  for (const l of lines) { ctx.fillText(l, 60, ly); ly += 16; }
+  ly += 12;
+  ctx.fillText('*  It looks like you crashed. Would you like help?', 60, ly); ly += 24;
+  ctx.font = 'bold 12px monospace';
+  ctx.fillText('*  FINAL SCORE ....... ' + pad(game.score, 6), 60, ly); ly += 18;
+  ctx.fillText('*  FLOPPIES SAVED .... ' + game.floppies + ' (' + (game.floppies * 1.44).toFixed(2) + ' MB)', 60, ly); ly += 18;
+  ctx.fillText('*  ZONE REACHED ...... ' + ZONES[Math.min(game.zoneIdx, ZONES.length - 1)], 60, ly); ly += 18;
+  if (game.newHi) {
+    ctx.fillStyle = '#ffff55';
+    ctx.fillText('*  NEW HIGH SCORE! Saved to A:\\HISCORE.INI', 60, ly); ly += 18;
+    ctx.fillStyle = '#ffffff';
+  }
+  ly += 14;
+  ctx.font = '12px monospace';
+  if (game.crashT > 90 && Math.floor(game.crashT / 22) % 2 === 0) {
+    ctx.fillText('Press ENTER to reboot and try again ...', 60, ly);
+  }
+  if (Math.floor(game.crashT / 16) % 2 === 0) {
+    ctx.fillText('_', 60, ly + 22);
+  }
+}
+
+/* ---------------- dispatch draw helpers -------------------------------- */
+
+function drawObstacle(o) {
+  if (o.type === 'dialog') drawDialog(o);
+  else if (o.type === 'bin') drawBin(o);
+  else if (o.type === 'bsod') drawBsodWall(o);
+  else if (o.type === 'banner') drawBanner(o);
+  else if (o.type === 'hourglass') drawHourglass(o);
+}
+function drawCollectible(cn) {
+  if (cn.kind === 'floppy') drawFloppy(cn);
+  else drawCD(cn);
+}
+
+/* ---------------- main loop -------------------------------------------- */
+
+let lastTime = 0, acc = 0;
+const STEP = 1000 / 60;
+
+function frame(t) {
+  requestAnimationFrame(frame);
+  if (!lastTime) lastTime = t;
+  acc += Math.min(100, t - lastTime);
+  lastTime = t;
+
+  let stepped = false;
+  while (acc >= STEP) {
+    acc -= STEP;
+    if (!stepped) { tick(); stepped = true; }  // render-synced single tick; extra accumulated steps update logic only
+    else if (game.state === STATE.PLAY && !game.paused) { game.frame++; updatePlayer(); updateWorld(); }
+  }
+}
+
+function tick() {
+  game.frame++;
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  if (game.shake > 0) {
+    ctx.setTransform(1, 0, 0, 1, rnd(-1, 1) * game.shake * 0.6, rnd(-1, 1) * game.shake * 0.6);
+  }
+
+  if (game.state === STATE.BOOT) {
+    drawBoot();
+  } else if (game.state === STATE.TITLE) {
+    player.seqT++; updateEyesOnly();
+    drawTitle();
+  } else if (game.state === STATE.PLAY) {
+    if (!game.paused) {
+      updatePlayer();
+      updateWorld();
+    }
+    if (game.state === STATE.PLAY || game.state === STATE.CRASH) {
+      drawScenery();
+      for (const cn of game.coins) drawCollectible(cn);
+      for (const o of game.obstacles) drawObstacle(o);
+      drawParticles();
+      drawPlayer();
+      drawBubble();
+      drawHUD();
+      if (game.paused) drawPauseOverlay();
+    }
+    document.getElementById('statusScore').textContent = 'SCORE ' + pad(game.score, 6);
+  } else if (game.state === STATE.CRASH) {
+    drawCrashAndBsod();
+  } else if (game.state === STATE.BSOD) {
+    drawBsod();
+  }
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(scanCanvas, 0, 0);
+}
+
+function updateEyesOnly() {
+  if (player.seqT >= player.seq[player.seqIdx].d) {
+    player.seqT = 0;
+    player.seqIdx++;
+    if (player.seqIdx >= player.seq.length) {
+      player.seqIdx = 0;
+      player.seq = IDLE_SEQUENCES[Math.floor(Math.random() * IDLE_SEQUENCES.length)];
+    }
+  }
+}
+
+function drawPauseOverlay() {
+  ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0, 0, W, H);
+  const dw = 240, dh = 84, dx = (W - dw) / 2, dy = (H - dh) / 2;
+  bevelRect(dx, dy, dw, dh, true);
+  ctx.fillStyle = '#000080'; ctx.fillRect(dx + 3, dy + 3, dw - 6, 14);
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 10px monospace';
+  ctx.fillText('CLIPPY.EXE', dx + 7, dy + 14);
+  ctx.fillStyle = '#000000'; ctx.font = '11px monospace';
+  ctx.fillText('Game paused. Coffee break?', dx + 20, dy + 40);
+  ctx.fillText('Press P to resume.', dx + 20, dy + 58);
+}
+
+/* ---------------- input ------------------------------------------------ */
+
+function anyKeyProgress() {
+  Sfx.ensure();
+  if (game.state === STATE.BOOT) { game.bootT = BOOT_DONE_T; return true; }
+  return false;
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.repeat) {
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') e.preventDefault();
+    return;
+  }
+  if (anyKeyProgress()) { e.preventDefault(); return; }
+
+  switch (e.code) {
+    case 'Space': case 'ArrowUp': case 'KeyW':
+      e.preventDefault();
+      input.jumpHeld = true;
+      tryJump();
+      break;
+    case 'ArrowDown': case 'KeyS':
+      e.preventDefault();
+      setDuck(true);
+      break;
+    case 'Enter':
+      if (game.state === STATE.TITLE) startRun();
+      else if (game.state === STATE.BSOD && game.crashT > 90) startRun();
+      break;
+    case 'KeyP':
+      if (game.state === STATE.PLAY) {
+        game.paused = !game.paused;
+        if (game.paused) { Sfx.stopMusic(); setStatus('Paused.'); }
+        else { Sfx.startMusic(); setStatus('Running…'); }
+      }
+      break;
+    case 'KeyM':
+      Sfx.toggleMute();
+      break;
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') input.jumpHeld = false;
+  if (e.code === 'ArrowDown' || e.code === 'KeyS') setDuck(false);
+});
+
+canvas.addEventListener('pointerdown', (e) => {
+  Sfx.ensure();
+  if (game.state === STATE.BOOT) { game.bootT = BOOT_DONE_T; return; }
+  // tap bottom third of the canvas = duck, elsewhere = jump
+  const rect = canvas.getBoundingClientRect();
+  const relY = (e.clientY - rect.top) / rect.height;
+  if (game.state === STATE.PLAY && relY > 0.72) {
+    setDuck(true);
+    setTimeout(() => setDuck(false), 450);
+  } else {
+    input.jumpHeld = true;
+    tryJump();
+    setTimeout(() => { input.jumpHeld = false; }, 200);
+  }
+});
+
+window.addEventListener('blur', () => {
+  if (game.state === STATE.PLAY && !game.paused) {
+    game.paused = true;
+    Sfx.stopMusic();
+    setStatus('Paused (window lost focus).');
+  }
+});
+
+/* ---------------- chrome: menus, dialogs, clock ------------------------ */
+
+const menubar = document.getElementById('menubar');
+let openMenu = null;
+menubar.querySelectorAll('.mitem').forEach((mi) => {
+  mi.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (mi.dataset.menu === 'none') {
+      setStatus('This menu is not implemented. It is 1997. Please understand.');
+      return;
+    }
+    if (openMenu && openMenu !== mi) openMenu.classList.remove('open');
+    mi.classList.toggle('open');
+    openMenu = mi.classList.contains('open') ? mi : null;
+  });
+});
+document.addEventListener('click', () => {
+  if (openMenu) { openMenu.classList.remove('open'); openMenu = null; }
+});
+
+function showDialog(title, icon, html) {
+  document.getElementById('dlgTitle').textContent = title;
+  document.getElementById('dlgBigIcon').textContent = icon;
+  document.getElementById('dlgText').innerHTML = html;
+  document.getElementById('dlgOverlay').classList.add('show');
+}
+document.querySelectorAll('[data-dlg="close"]').forEach((b) =>
+  b.addEventListener('click', () => document.getElementById('dlgOverlay').classList.remove('show')));
+
+menubar.querySelectorAll('.ditem').forEach((di) => {
+  di.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (openMenu) { openMenu.classList.remove('open'); openMenu = null; }
+    const act = di.dataset.act;
+    if (act === 'new') startRun();
+    else if (act === 'pause' && game.state === STATE.PLAY) {
+      game.paused = true; Sfx.stopMusic(); setStatus('Paused.');
+    } else if (act === 'exit') {
+      showDialog('Exit CLIPPY.EXE', '⚠️',
+        'Are you sure you want to give up?<br><br>Clippy will remember this.');
+    } else if (act === 'about') {
+      showDialog('About CLIPPY.EXE', '📎',
+        '<b>CLIPPY.EXE v1.0</b><br>The Office Assistant Strikes Back<br><br>' +
+        'He has been waiting since 1997.<br>All he ever wanted was to help.<br><br>' +
+        '&copy; 1997 Paperclip Interactive. 640K RAM required.');
+    }
+  });
+});
+
+document.getElementById('btnClose').addEventListener('click', () => {
+  showDialog('CLIPPY.EXE', '📎', 'It looks like you’re trying to close this window.<br><br>I can’t let you do that. There is a game to play.');
+});
+document.getElementById('btnStart').addEventListener('click', () => {
+  showDialog('Start Menu', '🪟', 'The Start menu is busy defragmenting.<br><br>Estimated time remaining: 14 years.');
+});
+document.getElementById('trayVol').addEventListener('click', () => Sfx.toggleMute());
+
+function updateClock() {
+  const d = new Date();
+  let h = d.getHours();
+  const ap = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  document.getElementById('clock').textContent = h + ':' + String(d.getMinutes()).padStart(2, '0') + ' ' + ap;
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+/* ---------------- go --------------------------------------------------- */
+
+requestAnimationFrame(frame);
+
+})();
+</script>
+</body>
+</html>
