@@ -237,10 +237,11 @@ const HUD_H = 22;
 
 /* ---------------- Clippy pixel drawer (ported from Clippy.tsx) -------- */
 
-function createClippyDrawer(c, PX) {
-  const DK = '#48484f', MD = '#78787f', LT = '#a8a8b2', HI = '#c4c4ce';
-  const GL = '#dcdce4', WH = '#ffffff', PU = '#2a1810', EO = '#181820';
-  const EB = '#4a3828', EG = '#eeeef6';
+function createClippyDrawer(c, PX, pal) {
+  pal = pal || {};
+  const DK = pal.DK || '#48484f', MD = pal.MD || '#78787f', LT = pal.LT || '#a8a8b2', HI = pal.HI || '#c4c4ce';
+  const GL = pal.GL || '#dcdce4', WH = pal.WH || '#ffffff', PU = pal.PU || '#2a1810', EO = pal.EO || '#181820';
+  const EB = pal.EB || '#4a3828', EG = pal.EG || '#eeeef6';
 
   const px = (x, y, col) => { c.fillStyle = col; c.fillRect(x * PX, y * PX, PX, PX); };
 
@@ -352,11 +353,19 @@ const Sfx = {
   magnet() { this.tone(220,0.35,'sawtooth',0.08,880); setTimeout(()=>this.tone(1320,0.1,'square',0.08),320); },
   glide()  { this.tone(520,0.35,'triangle',0.09,940); setTimeout(()=>this.tone(940,0.25,'triangle',0.07,700),300); },
   zoom()   { this.tone(980,0.3,'square',0.09,320); },
+  alarm()  { for (let i=0;i<3;i++) { setTimeout(()=>this.tone(620,0.14,'sawtooth',0.11),i*300); setTimeout(()=>this.tone(430,0.14,'sawtooth',0.11),i*300+150); } },
+  throwSfx(){ this.tone(820,0.09,'square',0.08,300); },
+  bossHit(){ this.tone(160,0.16,'sawtooth',0.14,70); this.tone(1100,0.06,'square',0.1); },
+  bossDie(){ this.tone(700,0.5,'sawtooth',0.12,60); [523,659,784,1046,1318].forEach((f,i)=>setTimeout(()=>this.tone(f,0.2,'triangle',0.11),350+i*90)); },
   chime()  { [330,415,494,659].forEach((f,i)=>setTimeout(()=>this.tone(f,0.9,'triangle',0.10),i*120)); },
   // ------ music ------
+  mode: 'normal',
   LEAD: [523.25,659.25,783.99,659.25, 440,523.25,659.25,523.25, 349.23,440,523.25,440, 392,493.88,587.33,783.99],
   BASS: [130.81,0,130.81,0, 110,0,110,0, 87.31,0,87.31,0, 98,0,98,0],
+  BOSS_LEAD: [440,523.25,659.25,523.25, 392,493.88,587.33,493.88, 349.23,440,523.25,440, 329.63,415.30,493.88,415.30],
+  BOSS_BASS: [110,0,110,110, 98,0,98,98, 87.31,0,87.31,87.31, 82.41,0,82.41,82.41],
   STEP_DUR: 60 / 140 / 2,
+  setMode(m) { this.mode = m; },
   startMusic() {
     if (!this.ctx || this.musicTimer) return;
     this.musicStep = 0;
@@ -365,7 +374,9 @@ const Sfx = {
       if (this.muted) return;
       while (this.nextNoteTime < this.ctx.currentTime + 0.25) {
         const i = this.musicStep % 16;
-        const lead = this.LEAD[i], bass = this.BASS[i];
+        const boss = this.mode === 'boss';
+        const lead = (boss ? this.BOSS_LEAD : this.LEAD)[i];
+        const bass = (boss ? this.BOSS_BASS : this.BASS)[i];
         if (lead) this.tone(lead, this.STEP_DUR * 0.9, 'triangle', 0.055, 0, this.nextNoteTime);
         if (bass) this.tone(bass, this.STEP_DUR * 1.6, 'square', 0.045, 0, this.nextNoteTime);
         this.musicStep++;
@@ -416,6 +427,9 @@ const QUIPS = {
   magnet:   "Defragmenting! All your floppies are belong to me.",
   glide:    "It looks like you're writing a letter... TO THE SKY! Hold JUMP to glide!",
   zoom:     "View > Zoom > 50%. Suddenly the world is huge.",
+  bossIntro:"My evil twin! He stopped responding in 1997 and never forgave me. STOMP HIM!",
+  bossHit:  "Direct hit! Have you tried turning him off?",
+  bossDead: "Task terminated successfully. He won't be sending a crash report.",
   smash:    "It looks like that window stopped responding.",
   floppy5:  "You've got floppy! That's 1.44 MB of pure skill.",
   zone:     "Now entering: ",
@@ -445,6 +459,10 @@ const game = {
   slowmoT: 0,        // modem: slow-motion frames remaining
   magnetT: 0,        // defrag: floppy attraction frames remaining
   lastPowerDist: 0,
+  boss: null,
+  projectiles: [],
+  bossesKilled: 0,
+  nextBossScore: 2000,
   bubbleText: '',
   bubbleT: 0,
   quipCooldown: 0,
@@ -453,6 +471,13 @@ const game = {
 
 const PXC = 2;                       // clippy pixel scale
 const clippyDraw = createClippyDrawer(ctx, PXC);
+
+// the evil twin: hung-process gray, bloodshot pupils
+const PXB = 3;                       // boss pixel scale (1.5x Clippy)
+const evilDraw = createClippyDrawer(ctx, PXB, {
+  DK: '#26262c', MD: '#3e3e46', LT: '#585862', HI: '#70707c',
+  GL: '#8a8a96', PU: '#cc1010', EB: '#5a2020', EG: '#ff9090',
+});
 const CLIP_W = 26 * PXC, CLIP_GRID_H = 38 * PXC;
 const CLIP_BODY_H = 64;              // visible rows 3..34 at PXC=2
 const CLIP_HIT_W = 26;               // forgiving hitbox
@@ -472,6 +497,7 @@ const player = {
   glideT: 0,               // airmail: glide charge frames remaining
   tinyT: 0,                // zoom 50%: shrink frames remaining
   gliding: false,          // actively holding a glide this frame
+  graceT: 0,               // post-stomp mercy frames vs boss & projectiles
   trail: [],
   // running-hop (his walk cycle IS the hop, straight from Clippy.tsx)
   hopStep: 0, hopFrame: 0, hopWait: 0,
@@ -485,11 +511,13 @@ function resetRun() {
   game.obstacles = []; game.coins = []; game.particles = [];
   game.nextSpawnX = W + 220;
   game.multT = 0; game.slowmoT = 0; game.magnetT = 0; game.lastPowerDist = 0;
+  game.boss = null; game.projectiles = []; game.bossesKilled = 0; game.nextBossScore = 2000;
+  Sfx.setMode('normal');
   game.bubbleT = 0; game.quipCooldown = 0; game.flags = {};
   player.bottomY = GROUND_Y; player.vy = 0; player.grounded = true;
   player.jumps = 0; player.ducking = false; player.rot = 0;
   player.spinning = false; player.inv = 0; player.autosave = false; player.trail = [];
-  player.glideT = 0; player.tinyT = 0; player.gliding = false;
+  player.glideT = 0; player.tinyT = 0; player.gliding = false; player.graceT = 0;
   player.hopStep = 0; player.hopFrame = 0; player.hopWait = 0;
   say(QUIPS.start, 200);
   setStatus('Running… don’t let the paperclip down.');
@@ -810,6 +838,7 @@ function spawnCoins(x) {
 }
 
 function updateSpawner() {
+  if (game.boss) return;   // the arena clears for a boss
   if (game.dist < game.nextSpawnX) return;
   const sx = W + 40;
   if (Math.random() < 0.72) spawnObstacle(sx);
@@ -940,6 +969,7 @@ function updatePlayer() {
   if (player.squashT > 0) player.squashT--;
   if (player.glideT > 0) player.glideT--;
   if (player.tinyT > 0) player.tinyT--;
+  if (player.graceT > 0) player.graceT--;
   if (player.inv > 0) {
     player.inv--;
     player.trail.push({ x: player.cx, y: player.bottomY, t: 16 });
@@ -1053,6 +1083,15 @@ function updateWorld() {
     Sfx.power();
   }
 
+  // summon the boss at score milestones
+  if (!game.boss && game.score >= game.nextBossScore) startBoss();
+  if (game.boss) {
+    updateBoss(ts);
+    if (game.state !== STATE.PLAY) return;   // boss body hit may have crashed us
+  }
+  updateProjectiles(ts);
+  if (game.state !== STATE.PLAY) return;
+
   updateSpawner();
 
   const pbox = playerBox();
@@ -1162,6 +1201,154 @@ function updateWorld() {
   if (game.shake > 0) game.shake--;
 }
 
+/* ---------------- boss: clippy.exe (Not Responding) -------------------- */
+
+const BOSS_X = 508;
+const BOSS_BODY_W = 42, BOSS_BODY_H = 93;   // visible rows 3..34 at PXB=3
+
+function startBoss() {
+  const lvl = game.bossesKilled;
+  const hp = 3 + Math.min(2, lvl);
+  game.boss = {
+    lvl, hp, maxHp: hp,
+    x: W + 90,
+    bottomY: GROUND_Y - 132, baseY: GROUND_Y - 132,
+    phase: 'enter', t: 0, throws: 0, hitCd: 0,
+  };
+  game.projectiles = [];
+  Sfx.alarm();
+  Sfx.setMode('boss');
+  say(QUIPS.bossIntro, 220);
+  setStatus('WARNING: clippy.exe (Not Responding). End task by stomping.');
+}
+
+function bossBox(b) {
+  return { x: b.x - BOSS_BODY_W / 2, y: b.bottomY - BOSS_BODY_H, w: BOSS_BODY_W, h: BOSS_BODY_H };
+}
+
+function damageBoss(b) {
+  b.hp--;
+  b.hitCd = 45;
+  game.shake = 8;
+  const bb = bossBox(b);
+  burst(b.x, bb.y + 20, ['#3e3e46', '#8a8a96', '#cc1010', '#ffffff'], 14, 4);
+  if (b.hp <= 0) {
+    b.phase = 'dying'; b.t = 0;
+    game.projectiles = [];
+    Sfx.bossDie();
+  } else {
+    b.phase = 'stagger'; b.t = 0;
+    Sfx.bossHit();
+    quip(QUIPS.bossHit);
+  }
+}
+
+function throwProjectile(b) {
+  const px0 = b.x - 26, py0 = b.bottomY - 66;
+  game.projectiles.push({
+    x: px0, y: py0,
+    vx: -(4.2 + game.speed * 0.35 + b.lvl * 0.5),
+    vy: Math.max(-1.6, Math.min(1.8, ((player.bottomY - 40) - py0) * 0.012)),
+    rot: Math.random() * 6, w: 30, h: 22,
+  });
+  Sfx.throwSfx();
+}
+
+function updateBoss(ts) {
+  const b = game.boss;
+  b.t++;
+  if (b.hitCd > 0) b.hitCd--;
+
+  if (b.phase === 'enter') {
+    b.x -= 3.2 * ts;
+    b.bottomY += (b.baseY - b.bottomY) * 0.08;
+    if (b.x <= BOSS_X) { b.x = BOSS_X; b.phase = 'hover'; b.t = 0; b.throws = 0; }
+  } else if (b.phase === 'hover') {
+    b.bottomY = b.baseY + Math.sin(b.t * 0.05) * 14;
+    const cadence = Math.max(52, 88 - b.lvl * 10);
+    if (b.t > 0 && b.t % cadence === 0) { throwProjectile(b); b.throws++; }
+    if (b.throws >= 3 + Math.min(2, b.lvl)) { b.phase = 'telegraph'; b.t = 0; }
+  } else if (b.phase === 'telegraph') {
+    b.x = BOSS_X + rnd(-2, 2);
+    b.bottomY += (GROUND_Y - b.bottomY) * 0.14;
+    if (b.t > 52) { b.phase = 'charge'; b.t = 0; b.bottomY = GROUND_Y; }
+  } else if (b.phase === 'charge') {
+    b.bottomY = GROUND_Y;
+    b.x -= (6.2 + b.lvl * 0.7 + game.speed * 0.25) * ts;
+    if (b.x < -70) { b.x = W + 90; b.phase = 'enter'; b.t = 0; }
+  } else if (b.phase === 'stagger') {
+    // knocked silly: retreat fast so he isn't camping the landing zone
+    b.x = Math.min(BOSS_X + 36, b.x + 6.5);
+    b.bottomY += (b.baseY - b.bottomY) * 0.15;
+    if (b.t > 46) { b.phase = 'hover'; b.t = 0; b.throws = 0; }
+  } else if (b.phase === 'dying') {
+    game.shake = Math.max(game.shake, 3);
+    if (b.t % 7 === 0) {
+      burst(b.x + rnd(-20, 20), b.bottomY - rnd(10, 85),
+        ['#3e3e46', '#8a8a96', '#cc1010', '#ffffff', '#0000aa'], 8, 3.5);
+      burstCards(b.x, b.bottomY - 46);
+    }
+    if (b.t >= 64) {
+      // floppy shower + bounty
+      for (let i = 0; i < 8; i++) {
+        game.coins.push({ kind: 'floppy', x: b.x - 90 + i * 26, y: GROUND_Y - 60 - Math.sin(i / 7 * Math.PI) * 80, w: 14, h: 15 });
+      }
+      addScore(500);
+      game.bossesKilled++;
+      game.nextBossScore = game.score + 2500;
+      game.boss = null;
+      game.nextSpawnX = game.dist + 380;
+      Sfx.setMode('normal');
+      say(QUIPS.bossDead, 180);
+      setStatus('Evil twin terminated. It is once again safe to run.');
+      return;
+    }
+  }
+
+  // stomp + body collision (no body while exploding or knocked back)
+  if (b.phase !== 'dying' && b.phase !== 'stagger') {
+    const bb = bossBox(b), pb = playerBox();
+    if (overlap(pb, bb)) {
+      const stomp = player.vy > 1.2 && (pb.y + pb.h) < bb.y + 28;
+      if (stomp) {
+        damageBoss(b);
+        addScore(150);
+        player.vy = -9.6; player.grounded = false; player.jumps = 1;
+        player.spinning = false; player.rot = 0;
+        player.graceT = 50;                 // mercy frames while bouncing off
+        Sfx.djump();
+      } else if (player.inv > 0) {
+        if (b.hitCd === 0) damageBoss(b);   // HYPER mode: ram him
+      } else if (player.graceT === 0) {
+        crash();
+      }
+    }
+  }
+}
+
+function updateProjectiles(ts) {
+  const pb = playerBox();
+  for (const p of game.projectiles) {
+    p.x += p.vx * ts; p.y += p.vy * ts; p.rot += 0.13;
+    if (p.y > GROUND_Y - 12) {   // shatters on the taskbar
+      p.dead = true;
+      burst(p.x + 15, GROUND_Y - 6, ['#c0c0c0', '#ffffff', '#cc0000'], 6, 2);
+    }
+    if (!p.dead && overlap(pb, { x: p.x + 3, y: p.y + 3, w: p.w - 6, h: p.h - 6 })) {
+      if (player.inv > 0) {
+        p.dead = true;
+        addScore(25);
+        burst(p.x + 15, p.y + 11, ['#c0c0c0', '#ffffff', '#000080'], 8, 3);
+        Sfx.smash();
+      } else if (player.graceT === 0) {
+        p.dead = true;
+        crash();
+      }
+    }
+  }
+  game.projectiles = game.projectiles.filter(p => !p.dead && p.x > -50 && p.y < H + 30);
+}
+
 function cardBomb() {
   game.shake = 10;
   for (const o of game.obstacles) {
@@ -1169,6 +1356,11 @@ function cardBomb() {
     o.dead = true;
     addScore(50);
     burstCards(o.x + o.w / 2, o.y + o.h / 2);
+  }
+  for (const p of game.projectiles) {
+    p.dead = true;
+    addScore(25);
+    burstCards(p.x + 15, p.y + 11);
   }
 }
 
@@ -1193,6 +1385,12 @@ function crash() {
       if (o.dead || o.x > W + 20 || o.x + o.w < -20) continue;
       o.dead = true;
       burst(o.x + o.w / 2, o.y + o.h / 2, ['#ffd24a', '#ffffff', '#c0c0c0'], 10, 3);
+    }
+    game.projectiles = [];
+    // shove the boss back so he can't immediately re-clip you
+    if (game.boss && game.boss.phase !== 'dying') {
+      game.boss.phase = 'stagger'; game.boss.t = 0;
+      game.boss.x = Math.max(game.boss.x, BOSS_X);
     }
     Sfx.recover();
     say(QUIPS.saveUsed, 160);
@@ -1437,6 +1635,8 @@ function drawCrashAndBsod() {
     drawScenery();
     for (const o of game.obstacles) drawObstacle(o);
     for (const cn of game.coins) drawCollectible(cn);
+    drawBoss();
+    drawProjectiles();
     drawParticles();
     updateParticles();
     drawPlayer();
@@ -1488,6 +1688,80 @@ function drawBsod() {
   }
   if (Math.floor(game.crashT / 16) % 2 === 0) {
     ctx.fillText('_', 60, ly + 22);
+  }
+}
+
+/* ---------------- boss drawing ----------------------------------------- */
+
+function drawBoss() {
+  const b = game.boss;
+  if (!b) return;
+  const flicker = b.phase !== 'dying' && (b.t % 44) < 5;
+
+  ctx.save();
+  if (b.phase === 'dying') {
+    ctx.globalAlpha = Math.max(0.1, 1 - b.t / 64);
+    ctx.translate(rnd(-3, 3), rnd(-3, 3));
+  } else if (flicker) {
+    ctx.globalAlpha = 0.5;   // hung-window flicker
+  }
+  ctx.translate(b.x - 13 * PXB, b.bottomY - 35 * PXB);
+  evilDraw.drawBody();
+  const blink = (b.t % 150) < 6;
+  evilDraw.drawEyes(-1, b.phase === 'charge' ? 0 : (player.bottomY < b.bottomY - 60 ? -1 : 0), blink);
+  ctx.restore();
+  ctx.globalAlpha = 1;
+
+  // red warning flash while he winds up a charge
+  if (b.phase === 'telegraph' && Math.floor(b.t / 5) % 2 === 0) {
+    const bb = bossBox(b);
+    ctx.fillStyle = 'rgba(255,0,0,0.2)';
+    ctx.fillRect(bb.x - 5, bb.y - 5, bb.w + 10, bb.h + 10);
+  }
+
+  // floating mini titlebar, like a window that gave up
+  if (b.phase !== 'dying') {
+    const tw = 152, tx = b.x - tw / 2, ty = b.bottomY - BOSS_BODY_H - 30;
+    ctx.fillStyle = '#c0c0c0'; ctx.fillRect(tx - 2, ty - 2, tw + 4, 18);
+    ctx.fillStyle = '#000080'; ctx.fillRect(tx, ty, tw, 14);
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 8px monospace';
+    ctx.fillText('clippy.exe (Not Responding)', tx + 5, ty + 10);
+  }
+}
+
+function drawProjectiles() {
+  for (const p of game.projectiles) {
+    ctx.save();
+    ctx.translate(p.x + p.w / 2, p.y + p.h / 2);
+    ctx.rotate(p.rot);
+    ctx.fillStyle = '#c0c0c0'; ctx.fillRect(-15, -11, 30, 22);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(-15, -11, 30, 2); ctx.fillRect(-15, -11, 2, 22);
+    ctx.fillStyle = '#404040'; ctx.fillRect(-15, 9, 30, 2); ctx.fillRect(13, -11, 2, 22);
+    ctx.fillStyle = '#000080'; ctx.fillRect(-13, -9, 26, 6);
+    ctx.fillStyle = '#cc0000';
+    ctx.beginPath(); ctx.arc(-5, 4, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 7px monospace'; ctx.fillText('X', -7, 7);
+    ctx.fillStyle = '#707070'; ctx.fillRect(2, 2, 9, 2); ctx.fillRect(2, 6, 7, 2);
+    ctx.restore();
+  }
+}
+
+function drawBossBar() {
+  const b = game.boss;
+  if (!b) return;
+  const w = 216, x = (W - w) / 2, y = HUD_H + 5;
+  ctx.fillStyle = '#c0c0c0'; ctx.fillRect(x, y, w, 27);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y, 1, 27);
+  ctx.fillStyle = '#404040'; ctx.fillRect(x, y + 26, w, 1); ctx.fillRect(x + w - 1, y, 1, 27);
+  ctx.fillStyle = '#000000'; ctx.font = 'bold 8px monospace';
+  ctx.fillText('EVIL TWIN — clippy.exe (Not Responding)', x + 6, y + 10);
+  // sunken segmented meter, like a defrag bar gone wrong
+  ctx.fillStyle = '#808080'; ctx.fillRect(x + 5, y + 13, w - 10, 10);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(x + 5, y + 22, w - 10, 1);
+  const segW = (w - 14) / b.maxHp;
+  for (let i = 0; i < b.hp; i++) {
+    ctx.fillStyle = '#cc2020';
+    ctx.fillRect(x + 7 + i * segW, y + 15, segW - 2, 6);
   }
 }
 
@@ -1661,6 +1935,8 @@ function tick() {
       drawScenery();
       for (const cn of game.coins) drawCollectible(cn);
       for (const o of game.obstacles) drawObstacle(o);
+      drawBoss();
+      drawProjectiles();
       drawParticles();
       drawPlayer();
       if (game.slowmoT > 0) {           // dial-up slow-mo tint
@@ -1670,6 +1946,7 @@ function tick() {
       drawBubble();
       drawHUD();
       drawBadges();
+      drawBossBar();
       if (game.paused) drawPauseOverlay();
     }
     document.getElementById('statusScore').textContent = 'SCORE ' + pad(game.score, 6);
@@ -1851,6 +2128,9 @@ window.__clippy = {
   game, player,
   give(kind) {
     game.coins.push({ kind, x: player.cx + 50, y: GROUND_Y - 70, w: 22, h: 22 });
+  },
+  summonBoss() {
+    game.nextBossScore = game.score;
   },
 };
 
