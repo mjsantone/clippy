@@ -44,6 +44,9 @@ get him.
 | 🥇 **Golden Floppy** | Autosave — one free death. On impact: *"Document recovered from autosave. Phew!"* |
 | 📠 **56K Modem** | Dial-up slow-motion for 6 seconds, screech included. The world now loads at 56k |
 | 🂡 **Ace of Hearts** | Solitaire smart bomb — every obstacle on screen explodes into bouncing cards, +50 each |
+| 🧲 **Defrag Magnet** | Floppy disks within reach fly to you for 8 seconds |
+| ✈️ **Airmail** | Clippy rides a letter — hold JUMP mid-air to glide for 7 seconds. *"It looks like you're writing a letter... TO THE SKY!"* |
+| 🔍 **View > Zoom 50%** | Clippy shrinks to half size for 8 seconds — tiny hitbox, huge world |
 
 Active effects show as beveled tags under the score bar and blink when about
 to expire. Effects stack — coffee-doubled card bombs are the path to big scores.

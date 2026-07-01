@@ -349,6 +349,9 @@ const Sfx = {
     setTimeout(()=>this.tone(900,0.45,'sawtooth',0.045,250), 440);
   },
   card()   { for (let i=0;i<5;i++) setTimeout(()=>this.tone(950-i*130,0.035,'square',0.09),i*45); },
+  magnet() { this.tone(220,0.35,'sawtooth',0.08,880); setTimeout(()=>this.tone(1320,0.1,'square',0.08),320); },
+  glide()  { this.tone(520,0.35,'triangle',0.09,940); setTimeout(()=>this.tone(940,0.25,'triangle',0.07,700),300); },
+  zoom()   { this.tone(980,0.3,'square',0.09,320); },
   chime()  { [330,415,494,659].forEach((f,i)=>setTimeout(()=>this.tone(f,0.9,'triangle',0.10),i*120)); },
   // ------ music ------
   LEAD: [523.25,659.25,783.99,659.25, 440,523.25,659.25,523.25, 349.23,440,523.25,440, 392,493.88,587.33,783.99],
@@ -410,6 +413,9 @@ const QUIPS = {
   saveUsed: "Document recovered from autosave. Phew!",
   modem:    "Dial-up engaged! The world now loads at 56k.",
   card:     "It looks like you're trying to win Solitaire. Deal 'em!",
+  magnet:   "Defragmenting! All your floppies are belong to me.",
+  glide:    "It looks like you're writing a letter... TO THE SKY! Hold JUMP to glide!",
+  zoom:     "View > Zoom > 50%. Suddenly the world is huge.",
   smash:    "It looks like that window stopped responding.",
   floppy5:  "You've got floppy! That's 1.44 MB of pure skill.",
   zone:     "Now entering: ",
@@ -437,6 +443,7 @@ const game = {
   nextSpawnX: 0,
   multT: 0,          // coffee: 2x score frames remaining
   slowmoT: 0,        // modem: slow-motion frames remaining
+  magnetT: 0,        // defrag: floppy attraction frames remaining
   lastPowerDist: 0,
   bubbleText: '',
   bubbleT: 0,
@@ -462,6 +469,9 @@ const player = {
   squashT: 0,
   inv: 0,                  // invincibility frames remaining
   autosave: false,         // one free crash
+  glideT: 0,               // airmail: glide charge frames remaining
+  tinyT: 0,                // zoom 50%: shrink frames remaining
+  gliding: false,          // actively holding a glide this frame
   trail: [],
   // running-hop (his walk cycle IS the hop, straight from Clippy.tsx)
   hopStep: 0, hopFrame: 0, hopWait: 0,
@@ -474,11 +484,12 @@ function resetRun() {
   game.zoneIdx = 0; game.newHi = false; game.shake = 0;
   game.obstacles = []; game.coins = []; game.particles = [];
   game.nextSpawnX = W + 220;
-  game.multT = 0; game.slowmoT = 0; game.lastPowerDist = 0;
+  game.multT = 0; game.slowmoT = 0; game.magnetT = 0; game.lastPowerDist = 0;
   game.bubbleT = 0; game.quipCooldown = 0; game.flags = {};
   player.bottomY = GROUND_Y; player.vy = 0; player.grounded = true;
   player.jumps = 0; player.ducking = false; player.rot = 0;
   player.spinning = false; player.inv = 0; player.autosave = false; player.trail = [];
+  player.glideT = 0; player.tinyT = 0; player.gliding = false;
   player.hopStep = 0; player.hopFrame = 0; player.hopWait = 0;
   say(QUIPS.start, 200);
   setStatus('Running… don’t let the paperclip down.');
@@ -784,8 +795,9 @@ function spawnCoins(x) {
   }
   // power-ups appear on coin slots, rate-limited by distance
   const POWERS = [
-    { kind: 'coffee', min: 500 }, { kind: 'cd', min: 700 }, { kind: 'save', min: 800 },
-    { kind: 'modem', min: 1000 }, { kind: 'card', min: 1300 },
+    { kind: 'coffee', min: 500 }, { kind: 'magnet', min: 600 }, { kind: 'cd', min: 700 },
+    { kind: 'save', min: 800 }, { kind: 'glide', min: 900 }, { kind: 'modem', min: 1000 },
+    { kind: 'zoom', min: 1200 }, { kind: 'card', min: 1300 },
   ];
   if (game.dist - game.lastPowerDist > 900 && Math.random() < 0.55) {
     const avail = POWERS.filter(p => game.dist > p.min);
@@ -882,16 +894,25 @@ function setDuck(on) {
 }
 
 function playerBox() {
-  const sy = player.ducking ? 0.55 : 1;
+  const tiny = player.tinyT > 0 ? 0.6 : 1;
+  const sy = (player.ducking ? 0.55 : 1) * tiny;
   const h = CLIP_BODY_H * sy - 6;
-  return { x: player.cx - CLIP_HIT_W / 2, y: player.bottomY - h, w: CLIP_HIT_W, h };
+  const w = CLIP_HIT_W * tiny;
+  return { x: player.cx - w / 2, y: player.bottomY - h, w, h };
 }
 
 function updatePlayer() {
   // physics
+  player.gliding = false;
   if (!player.grounded) {
     player.vy += 0.55;
     if (!input.jumpHeld && player.vy < -4) player.vy = -4;  // jump cut
+    // airmail glide: hold jump while falling to ride the letter down
+    if (player.glideT > 0 && input.jumpHeld && !player.ducking && player.vy > 1.3) {
+      player.vy = 1.3;
+      player.gliding = true;
+      player.spinning = false; player.rot = 0;
+    }
     player.bottomY += player.vy;
     if (player.bottomY >= GROUND_Y) {
       player.bottomY = GROUND_Y;
@@ -917,6 +938,8 @@ function updatePlayer() {
     }
   }
   if (player.squashT > 0) player.squashT--;
+  if (player.glideT > 0) player.glideT--;
+  if (player.tinyT > 0) player.tinyT--;
   if (player.inv > 0) {
     player.inv--;
     player.trail.push({ x: player.cx, y: player.bottomY, t: 16 });
@@ -961,6 +984,7 @@ function drawPlayer() {
   let sx = 1, sy = 1;
   if (player.ducking) { sx = 1.25; sy = 0.55; }
   else if (player.squashT > 0) { sx = 1 + player.squashT * 0.02; sy = 1 - player.squashT * 0.02; }
+  if (player.tinyT > 0) { sx *= 0.6; sy *= 0.6; }   // zoom 50%
 
   if (player.inv > 0 && player.inv < 90 && Math.floor(game.frame / 5) % 2 === 0) {
     // blink warning as the power-up runs out — skip a frame
@@ -971,6 +995,17 @@ function drawPlayer() {
   ctx.translate(player.cx + jitter, player.bottomY + hop + jitter * 0.5);
   ctx.rotate(player.rot);
   ctx.scale(sx, sy);
+  if (player.gliding) {
+    // the letter he's riding
+    const flut = Math.sin(game.frame * 0.3) * 2;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(-32, 2); ctx.lineTo(30, 2 + flut); ctx.lineTo(36, 8 + flut); ctx.lineTo(-26, 8);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#c8d0dc'; ctx.fillRect(-26, 7, 62, 2);
+    ctx.fillStyle = '#a0a8b8';                       // faint ruled lines
+    ctx.fillRect(-24, 4, 20, 1); ctx.fillRect(4, 4, 22, 1);
+  }
   ctx.translate(-13 * PXC, -35 * PXC);
   if (player.inv > 0) {
     ctx.shadowColor = 'hsl(' + ((game.frame * 12) % 360) + ',100%,60%)';
@@ -1008,6 +1043,7 @@ function updateWorld() {
   if (game.bubbleT > 0) game.bubbleT--;
   if (game.multT > 0) game.multT--;
   if (game.slowmoT > 0) game.slowmoT--;
+  if (game.magnetT > 0) game.magnetT--;
 
   // zone announcements
   const zi = Math.min(ZONES.length - 1, Math.floor(game.score / 1500));
@@ -1057,6 +1093,11 @@ function updateWorld() {
   // coins + power-ups
   for (const cn of game.coins) {
     cn.x -= sp;
+    // defrag magnet pulls floppies in
+    if (game.magnetT > 0 && cn.kind === 'floppy' && !cn.taken) {
+      const dx = player.cx - (cn.x + 7), dy = (player.bottomY - 32) - (cn.y + 7);
+      if (dx * dx + dy * dy < 140 * 140) { cn.x += dx * 0.11; cn.y += dy * 0.11; }
+    }
     if (!cn.taken && overlap(pbox, cn)) {
       cn.taken = true;
       if (cn.kind === 'floppy') {
@@ -1094,6 +1135,24 @@ function updateWorld() {
         cardBomb();
         Sfx.card();
         say(QUIPS.card, 160);
+      } else if (cn.kind === 'magnet') {
+        game.magnetT = 60 * 8;
+        addScore(50);
+        burst(cn.x + 11, cn.y + 11, ['#cc2020', '#c8c8d4', '#4a5cc8'], 10, 2.5);
+        Sfx.magnet();
+        say(QUIPS.magnet, 160);
+      } else if (cn.kind === 'glide') {
+        player.glideT = 60 * 7;
+        addScore(50);
+        burst(cn.x + 11, cn.y + 11, ['#ffffff', '#e8e8f0', '#c0d8ff'], 10, 2.5);
+        Sfx.glide();
+        say(QUIPS.glide, 180);
+      } else if (cn.kind === 'zoom') {
+        player.tinyT = 60 * 8;
+        addScore(50);
+        burst(cn.x + 11, cn.y + 11, ['#8098c0', '#ffffff', '#404040'], 10, 2.5);
+        Sfx.zoom();
+        say(QUIPS.zoom, 160);
       }
     }
   }
@@ -1189,6 +1248,9 @@ function drawBadges() {
   if (player.inv > 0)     badges.push(['HYPER!', 'hsl(' + ((game.frame * 12) % 360) + ',90%,40%)', player.inv]);
   if (game.multT > 0)     badges.push(['2X PTS', '#7a3b00', game.multT]);
   if (game.slowmoT > 0)   badges.push(['56K SLO-MO', '#004080', game.slowmoT]);
+  if (game.magnetT > 0)   badges.push(['DEFRAG', '#a02020', game.magnetT]);
+  if (player.glideT > 0)  badges.push(['AIRMAIL', '#3a5a8a', player.glideT]);
+  if (player.tinyT > 0)   badges.push(['ZOOM 50%', '#5a2a7a', player.tinyT]);
   if (player.autosave)    badges.push(['AUTOSAVED', '#0a7a2a', -1]);
   let bx = W - 8;
   ctx.font = 'bold 9px monospace';
@@ -1440,6 +1502,54 @@ function drawCollectible(cn) {
   else if (cn.kind === 'save') drawGoldFloppy(cn);
   else if (cn.kind === 'modem') drawModem(cn);
   else if (cn.kind === 'card') drawAceCard(cn);
+  else if (cn.kind === 'magnet') drawMagnet(cn);
+  else if (cn.kind === 'glide') drawPaperPlane(cn);
+  else if (cn.kind === 'zoom') drawMagnifier(cn);
+}
+
+function drawMagnet(cn) {
+  const bob = Math.sin(game.frame * 0.09 + cn.x * 0.03) * 3;
+  const x = cn.x + 2, y = cn.y + 3 + bob;
+  ctx.fillStyle = '#cc2020';                                  // horseshoe
+  ctx.fillRect(x, y, 5, 12); ctx.fillRect(x + 12, y, 5, 12);
+  ctx.fillRect(x, y + 10, 17, 5);
+  ctx.fillStyle = '#e05050'; ctx.fillRect(x, y + 10, 17, 2);
+  ctx.fillStyle = '#d8d8e0';                                  // silver tips
+  ctx.fillRect(x, y, 5, 4); ctx.fillRect(x + 12, y, 5, 4);
+  // attraction sparks
+  if (Math.floor(game.frame / 10) % 2 === 0) {
+    ctx.fillStyle = '#ffe66e';
+    ctx.fillRect(x + 1, y - 5, 2, 2); ctx.fillRect(x + 14, y - 7, 2, 2);
+  }
+}
+
+function drawPaperPlane(cn) {
+  const bob = Math.sin(game.frame * 0.09 + cn.x * 0.03) * 4;
+  const x = cn.x, y = cn.y + 6 + bob;
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.moveTo(x, y + 10); ctx.lineTo(x + 22, y); ctx.lineTo(x + 9, y + 10); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#d0d8e8';
+  ctx.beginPath(); ctx.moveTo(x + 9, y + 10); ctx.lineTo(x + 22, y); ctx.lineTo(x + 13, y + 14); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#8090a8'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x, y + 10); ctx.lineTo(x + 22, y); ctx.stroke();
+  // motion streaks
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.fillRect(x - 6, y + 4, 4, 1); ctx.fillRect(x - 9, y + 8, 5, 1);
+}
+
+function drawMagnifier(cn) {
+  const bob = Math.sin(game.frame * 0.09 + cn.x * 0.03) * 3;
+  const cx = cn.x + 9, cy = cn.y + 8 + bob;
+  ctx.strokeStyle = '#404048'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = 'rgba(160,200,255,0.65)';
+  ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(cx - 4, cy - 4, 2, 2);  // glint
+  ctx.fillStyle = '#202028'; ctx.fillRect(cx - 3, cy - 1, 6, 2);  // minus: zoom OUT
+  ctx.save();                                                     // handle
+  ctx.translate(cx + 5, cy + 5); ctx.rotate(Math.PI / 4);
+  ctx.fillStyle = '#7a4a20'; ctx.fillRect(0, -2, 9, 4);
+  ctx.restore();
 }
 
 function drawCoffeeMug(cn) {
