@@ -52,6 +52,22 @@
     padding: 3px;
     z-index: 2;
   }
+  /* real Win95 maximize: fill everything above the taskbar */
+  .app-window.maximized {
+    top: 0; left: 0; right: 0; bottom: 30px;
+    transform: none;
+    display: flex; flex-direction: column;
+  }
+  .app-window.maximized .canvas-frame {
+    flex: 1; min-height: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #000;
+  }
+  .app-window.maximized canvas#game {
+    height: min(100%, calc((100vw - 24px) * 9 / 16));
+    width: auto;
+    aspect-ratio: 16 / 9;
+  }
   .titlebar {
     display: flex; align-items: center; gap: 4px;
     height: 20px;
@@ -171,8 +187,8 @@
   <div class="titlebar">
     <span class="ticon">📎</span>
     <span class="ttext" id="winTitle">CLIPPY.EXE — The Office Assistant Strikes Back</span>
-    <div class="tbtn bevel-out">_</div>
-    <div class="tbtn bevel-out">▢</div>
+    <div class="tbtn bevel-out" id="btnMin">_</div>
+    <div class="tbtn bevel-out" id="btnMax" title="Maximize">▢</div>
     <div class="tbtn bevel-out" id="btnClose">✕</div>
   </div>
   <div class="menubar" id="menubar">
@@ -2105,6 +2121,45 @@ menubar.querySelectorAll('.ditem').forEach((di) => {
 
 document.getElementById('btnClose').addEventListener('click', () => {
   showDialog('CLIPPY.EXE', '📎', 'It looks like you’re trying to close this window.<br><br>I can’t let you do that. There is a game to play.');
+});
+document.getElementById('btnMin').addEventListener('click', () => {
+  setStatus('Minimize? And leave Clippy alone out there? No.');
+});
+
+/* ---- maximize / fullscreen ---- */
+const appWindow = document.querySelector('.app-window');
+const btnMax = document.getElementById('btnMax');
+
+function setMaximized(on) {
+  appWindow.classList.toggle('maximized', on);
+  btnMax.textContent = on ? '❐' : '▢';
+  btnMax.title = on ? 'Restore' : 'Maximize';
+  setStatus(on ? 'Maximized. All 640Kb of screen, as intended.' : 'Window restored.');
+}
+
+function toggleMaximize() {
+  const on = !appWindow.classList.contains('maximized');
+  setMaximized(on);
+  // best-effort browser fullscreen on top of the CSS maximize
+  if (on) {
+    const el = document.documentElement;
+    if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+  } else if (document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
+btnMax.addEventListener('click', toggleMaximize);
+// double-click the titlebar, like real Windows
+document.querySelector('.titlebar').addEventListener('dblclick', (e) => {
+  if (e.target.classList.contains('tbtn')) return;
+  toggleMaximize();
+});
+document.addEventListener('fullscreenchange', () => {
+  // Esc out of browser fullscreen also restores the window
+  if (!document.fullscreenElement && appWindow.classList.contains('maximized')) {
+    setMaximized(false);
+  }
 });
 document.getElementById('btnStart').addEventListener('click', () => {
   showDialog('Start Menu', '🪟', 'The Start menu is busy defragmenting.<br><br>Estimated time remaining: 14 years.');
