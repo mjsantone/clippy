@@ -31,9 +31,14 @@ get him.
 - **Duck** under garish blinking banner ads (*FREE RAM!!! >> CLICK HERE <<*)
 - **Dodge** winged hourglass cursors — time flies
 - **Collect** 3.5" floppy disks (25 pts each, 1.44 MB of pure skill)
-- **Survive** through nine zones: The Teal Desktop → Spreadsheet Canyon →
-  Mail Merge Marshes → Dial-Up Dunes → Comic Sans Grove → The Blue Screen
-  Badlands → Recycle Bin Abyss → System32 Catacombs → The Registry (Do Not Edit)
+- **Survive** through nine lands, each with its own sky and architecture that
+  crossfade as you cross the border: The Teal Desktop → Spreadsheet Canyon
+  (spreadsheet towers) → Mail Merge Marshes (envelope blocks) → Dial-Up Dunes
+  (sandstone strata at sunset) → Comic Sans Grove (letter blocks, bubblegum sky)
+  → The Blue Screen Badlands (gibberish monoliths) → Recycle Bin Abyss →
+  System32 Catacombs (DOS towers, blinking cursors) → The Registry (Do Not Edit)
+
+![The nine lands](docs/lands.png)
 
 ### Power-ups
 
