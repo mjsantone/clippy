@@ -89,7 +89,8 @@ score formatted as a fatal exception report.
 | `Enter` | Start / reboot after a crash |
 | `P` | Pause |
 | `M` | Mute |
-| Click / tap | Jump (tap the bottom of the screen to duck) |
+| Tap / click | Jump (hold for a higher jump, or to glide with Airmail) |
+| Hold the bottom quarter of the screen | Duck — held for as long as your finger is down |
 
 ## 90s features, lovingly recreated
 

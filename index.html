@@ -112,6 +112,8 @@
     image-rendering: crisp-edges;
     background: #008080;
     cursor: crosshair;
+    touch-action: none;               /* keep gestures ours: no scroll/zoom steal */
+    -webkit-tap-highlight-color: transparent;
   }
 
   .statusbar { display: flex; gap: 2px; margin: 3px; height: 20px; }
@@ -1761,7 +1763,9 @@ function drawTitle() {
   }
   ctx.font = '10px monospace';
   ctx.fillStyle = '#e0f0f0';
-  ctx.fillText('SPACE/↑ jump (press twice to double-jump)   ↓ duck   P pause   M mute', 82, 298);
+  ctx.fillText(touchMode
+    ? 'TAP jump (tap twice = double)   HOLD bottom of screen = duck   HOLD tap = glide'
+    : 'SPACE/↑ jump (press twice to double-jump)   ↓ duck   P pause   M mute', 82, 298);
   if (game.hi > 0) {
     ctx.fillStyle = '#ffe66e';
     ctx.fillText('HIGH SCORE: ' + pad(game.hi, 6) + '   BEST FLOPPY HAUL: ' + game.hiFloppy, 190, 312);
@@ -2091,6 +2095,7 @@ function tick() {
         ctx.fillStyle = 'rgba(0,60,170,0.13)';
         ctx.fillRect(0, 0, W, H);
       }
+      drawTouchHint();
       drawBubble();
       drawHUD();
       drawBadges();
@@ -2117,6 +2122,21 @@ function updateEyesOnly() {
       player.seq = IDLE_SEQUENCES[Math.floor(Math.random() * IDLE_SEQUENCES.length)];
     }
   }
+}
+
+// teaches touch players where the duck zone is, then fades away
+function drawTouchHint() {
+  if (!touchMode || game.state !== STATE.PLAY) return;
+  const a = Math.max(0, 1 - game.dist / 1600) * 0.55;
+  if (a <= 0) return;
+  const y = Math.round(H * 0.72);
+  ctx.globalAlpha = a;
+  ctx.fillStyle = '#ffffff';
+  for (let x = 0; x < W; x += 14) ctx.fillRect(x, y, 7, 1);
+  ctx.font = 'bold 10px monospace';
+  ctx.fillText('▼ HOLD HERE TO DUCK', W - 150, y + 14);
+  ctx.fillText('TAP / HOLD ABOVE TO JUMP', W - 174, y - 8);
+  ctx.globalAlpha = 1;
 }
 
 function drawPauseOverlay() {
@@ -2178,21 +2198,40 @@ window.addEventListener('keyup', (e) => {
   if (e.code === 'ArrowDown' || e.code === 'KeyS') setDuck(false);
 });
 
+// Touch/mouse: press-and-hold semantics, mirroring the keyboard.
+// Hold the bottom zone to duck (as long as the finger is down); hold
+// anywhere else to jump high / glide. Multi-touch: each finger tracked.
+let touchMode = false;
+const activePointers = new Map();   // pointerId -> 'jump' | 'duck'
+
 canvas.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
   Sfx.ensure();
+  if (e.pointerType === 'touch') touchMode = true;
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic events */ }
   if (game.state === STATE.BOOT) { game.bootT = BOOT_DONE_T; return; }
-  // tap bottom third of the canvas = duck, elsewhere = jump
   const rect = canvas.getBoundingClientRect();
   const relY = (e.clientY - rect.top) / rect.height;
   if (game.state === STATE.PLAY && relY > 0.72) {
+    activePointers.set(e.pointerId, 'duck');
     setDuck(true);
-    setTimeout(() => setDuck(false), 450);
   } else {
+    activePointers.set(e.pointerId, 'jump');
     input.jumpHeld = true;
     tryJump();
-    setTimeout(() => { input.jumpHeld = false; }, 200);
   }
 });
+
+function releasePointer(e) {
+  const action = activePointers.get(e.pointerId);
+  activePointers.delete(e.pointerId);
+  if (!action) return;
+  const held = [...activePointers.values()];
+  if (action === 'duck' && !held.includes('duck')) setDuck(false);
+  if (action === 'jump' && !held.includes('jump')) input.jumpHeld = false;
+}
+canvas.addEventListener('pointerup', releasePointer);
+canvas.addEventListener('pointercancel', releasePointer);
 
 window.addEventListener('blur', () => {
   if (game.state === STATE.PLAY && !game.paused) {
