@@ -92,6 +92,18 @@ score formatted as a fatal exception report.
 | Tap / click | Jump (hold for a higher jump, or to glide with Airmail) |
 | Hold the bottom quarter of the screen | Duck — held for as long as your finger is down |
 
+## On your phone
+
+CLIPPY.EXE is mobile-first when it needs to be:
+
+- On phones in **landscape**, the Win95 desktop gets out of the way — the game
+  runs edge-to-edge with just a small ⏸ pause chip (tap the game to resume)
+- In **portrait** you get a period-accurate Display Settings dialog telling you
+  to rotate (*"It looks like you're holding your phone wrong."*)
+- It's an installable **PWA**: open the hosted page, "Add to Home Screen," and
+  it launches fullscreen with a pixel-Clippy icon and **plays offline** via a
+  service worker (HTTPS hosting required — e.g. GitHub Pages)
+
 ## 90s features, lovingly recreated
 
 - Fake BIOS boot sequence (`Memory Test: 640K ... OK`) with a chunky loading bar
