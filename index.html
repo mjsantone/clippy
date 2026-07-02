@@ -1085,6 +1085,20 @@ function setDuck(on) {
   }
 }
 
+function pauseGame(msg) {
+  if (game.state !== STATE.PLAY || game.paused) return;
+  game.paused = true;
+  Sfx.stopMusic();
+  setStatus(msg || 'Paused.');
+}
+
+function resumeGame() {
+  if (game.state !== STATE.PLAY || !game.paused) return;
+  game.paused = false;
+  Sfx.startMusic();
+  setStatus('Running…');
+}
+
 function playerBox() {
   const tiny = player.tinyT > 0 ? 0.6 : 1;
   const sy = (player.ducking ? 0.55 : 1) * tiny;
@@ -2133,7 +2147,7 @@ function drawPauseOverlay() {
   ctx.fillText('CLIPPY.EXE', dx + 7, dy + 14);
   ctx.fillStyle = '#000000'; ctx.font = '11px monospace';
   ctx.fillText('Game paused. Coffee break?', dx + 20, dy + 40);
-  ctx.fillText('Press P to resume.', dx + 20, dy + 58);
+  ctx.fillText('Press P or tap to resume.', dx + 20, dy + 58);
 }
 
 /* ---------------- input ------------------------------------------------ */
@@ -2166,11 +2180,8 @@ window.addEventListener('keydown', (e) => {
       else if (game.state === STATE.BSOD && game.crashT > 90) startRun();
       break;
     case 'KeyP':
-      if (game.state === STATE.PLAY) {
-        game.paused = !game.paused;
-        if (game.paused) { Sfx.stopMusic(); setStatus('Paused.'); }
-        else { Sfx.startMusic(); setStatus('Running…'); }
-      }
+      if (game.paused) resumeGame();
+      else pauseGame();
       break;
     case 'KeyM':
       Sfx.toggleMute();
@@ -2195,6 +2206,7 @@ canvas.addEventListener('pointerdown', (e) => {
   if (e.pointerType === 'touch') touchMode = true;
   try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic events */ }
   if (game.state === STATE.BOOT) { game.bootT = BOOT_DONE_T; return; }
+  if (game.state === STATE.PLAY && game.paused) { resumeGame(); return; }   // tap to unpause
   const rect = canvas.getBoundingClientRect();
   const relY = (e.clientY - rect.top) / rect.height;
   if (game.state === STATE.PLAY && relY > 0.72) {
@@ -2223,11 +2235,7 @@ window.addEventListener('blur', () => {
   input.jumpHeld = false;
   player.ducking = false;
   activePointers.clear();
-  if (game.state === STATE.PLAY && !game.paused) {
-    game.paused = true;
-    Sfx.stopMusic();
-    setStatus('Paused (window lost focus).');
-  }
+  pauseGame('Paused (window lost focus).');
 });
 
 /* ---------------- chrome: menus, dialogs, clock ------------------------ */
@@ -2252,11 +2260,7 @@ document.addEventListener('click', () => {
 
 function showDialog(title, icon, html) {
   // a modal on top of a live game is a death sentence: pause first
-  if (game.state === STATE.PLAY && !game.paused) {
-    game.paused = true;
-    Sfx.stopMusic();
-    setStatus('Paused.');
-  }
+  pauseGame();
   document.getElementById('dlgTitle').textContent = title;
   document.getElementById('dlgBigIcon').textContent = icon;
   document.getElementById('dlgText').innerHTML = html;
@@ -2271,8 +2275,8 @@ menubar.querySelectorAll('.ditem').forEach((di) => {
     if (openMenu) { openMenu.classList.remove('open'); openMenu = null; }
     const act = di.dataset.act;
     if (act === 'new') startRun();
-    else if (act === 'pause' && game.state === STATE.PLAY) {
-      game.paused = true; Sfx.stopMusic(); setStatus('Paused.');
+    else if (act === 'pause') {
+      pauseGame();
     } else if (act === 'exit') {
       showDialog('Exit CLIPPY.EXE', '⚠️',
         'Are you sure you want to give up?<br><br>Clippy will remember this.');
