@@ -389,7 +389,11 @@ const Sfx = {
     this.musicStep = 0;
     this.nextNoteTime = this.ctx.currentTime + 0.1;
     this.musicTimer = setInterval(() => {
-      if (this.muted) return;
+      if (this.muted) {
+        // keep the cursor pinned to now so unmuting doesn't replay the backlog
+        this.nextNoteTime = this.ctx.currentTime + 0.1;
+        return;
+      }
       while (this.nextNoteTime < this.ctx.currentTime + 0.25) {
         const i = this.musicStep % 16;
         const boss = this.mode === 'boss';
@@ -540,14 +544,25 @@ const game = {
 };
 
 const PXC = 2;                       // clippy pixel scale
-const clippyDraw = createClippyDrawer(ctx, PXC);
+const clippyDraw = createClippyDrawer(ctx, PXC);   // eyes are animated: drawn live
 
 // the evil twin: hung-process gray, bloodshot pupils
 const PXB = 3;                       // boss pixel scale (1.5x Clippy)
-const evilDraw = createClippyDrawer(ctx, PXB, {
+const EVIL_PAL = {
   DK: '#26262c', MD: '#3e3e46', LT: '#585862', HI: '#70707c',
   GL: '#8a8a96', PU: '#cc1010', EB: '#5a2020', EG: '#ff9090',
-});
+};
+const evilDraw = createClippyDrawer(ctx, PXB, EVIL_PAL);
+
+// bodies never change per palette: render once, blit one image per frame
+function prerenderBody(PX, pal) {
+  const c = document.createElement('canvas');
+  c.width = 26 * PX; c.height = 38 * PX;
+  createClippyDrawer(c.getContext('2d'), PX, pal).drawBody();
+  return c;
+}
+const clippyBody = prerenderBody(PXC);
+const evilBody = prerenderBody(PXB, EVIL_PAL);
 const CLIP_W = 26 * PXC, CLIP_GRID_H = 38 * PXC;
 const CLIP_BODY_H = 64;              // visible rows 3..34 at PXC=2
 const CLIP_HIT_W = 26;               // forgiving hitbox
@@ -577,7 +592,7 @@ const player = {
 
 function resetRun() {
   game.speed = 4.2; game.dist = 0; game.score = 0; game.floppies = 0;
-  game.zoneIdx = 0; game.newHi = false; game.shake = 0;
+  game.zoneIdx = 0; game.newHi = false; game.shake = 0; game.paused = false;
   applyThemeInstant(0);
   game.obstacles = []; game.coins = []; game.particles = [];
   game.nextSpawnX = W + 220;
@@ -589,6 +604,7 @@ function resetRun() {
   player.jumps = 0; player.ducking = false; player.rot = 0;
   player.spinning = false; player.inv = 0; player.autosave = false; player.trail = [];
   player.glideT = 0; player.tinyT = 0; player.gliding = false; player.graceT = 0;
+  player.squashT = 0;
   player.hopStep = 0; player.hopFrame = 0; player.hopWait = 0;
   say(QUIPS.start, 200);
   setStatus('Running… don’t let the paperclip down.');
@@ -855,7 +871,7 @@ function drawBsodWall(o) {
 
 function drawBanner(o) {
   const { x, w, h } = o;
-  const y = o.y + Math.sin(game.frame * 0.08 + x * 0.01) * 3;
+  const y = o.hitY;   // computed in updateWorld; draw exactly the hitbox
   const flash = Math.floor(game.frame / 12) % 2 === 0;
   ctx.fillStyle = flash ? '#ffff00' : '#ff40ff';
   ctx.fillRect(x, y, w, h);
@@ -866,7 +882,6 @@ function drawBanner(o) {
   ctx.fillText(o.adText, x + 8, y + 12);
   ctx.font = 'bold 7px monospace';
   ctx.fillText('>> CLICK HERE <<', x + w/2 - 32, y + h - 5);
-  o.hitY = y;   // hitbox follows the wobble
 }
 
 function drawHourglass(o) {
@@ -947,7 +962,7 @@ function spawnObstacle(x) {
     game.obstacles.push({ type, x, y: GROUND_Y - h, w, h, smashable: true });
   } else if (type === 'banner') {
     const w = rnd(110, 150), h = 26;
-    game.obstacles.push({ type, x, y: GROUND_Y - 72, hitY: GROUND_Y - 72, w, h, smashable: true });
+    game.obstacles.push({ type, x, y: GROUND_Y - 72, hitY: GROUND_Y - 72, w, h, adText: pick(AD_TEXTS), smashable: true });
   } else if (type === 'hourglass') {
     const baseY = GROUND_Y - rnd(100, 155);
     game.obstacles.push({ type, x, y: baseY, hitY: baseY, w: 18, h: 22, baseY, amp: rnd(8, 16), ph: Math.random() * 6, smashable: true });
@@ -1046,7 +1061,7 @@ const input = { jumpHeld: false };
 function tryJump() {
   if (game.state === STATE.TITLE) { startRun(); return; }
   if (game.state === STATE.BSOD && game.crashT > 90) { startRun(); return; }
-  if (game.state !== STATE.PLAY) return;
+  if (game.state !== STATE.PLAY || game.paused) return;
   if (player.ducking) return;
   if (player.grounded) {
     player.vy = -10.6; player.grounded = false; player.jumps = 1;
@@ -1060,14 +1075,13 @@ function tryJump() {
 }
 
 function setDuck(on) {
-  if (game.state !== STATE.PLAY) return;
-  if (on && !player.ducking) {
+  if (!on) { player.ducking = false; return; }   // releasing always allowed
+  if (game.state !== STATE.PLAY || game.paused) return;
+  if (!player.ducking) {
     player.ducking = true;
     if (!player.grounded) player.vy = Math.max(player.vy, 7); // fast-fall
     Sfx.duck();
     if (!game.flags.duck) { game.flags.duck = true; quip(QUIPS.duck); }
-  } else if (!on) {
-    player.ducking = false;
   }
 }
 
@@ -1126,7 +1140,11 @@ function updatePlayer() {
   for (const tr of player.trail) tr.t--;
   player.trail = player.trail.filter(t => t.t > 0);
 
-  // eyes
+  advanceEyes();
+}
+
+// shared eye-sequence stepper (in-game and title screen)
+function advanceEyes() {
   player.seqT++;
   if (player.seqT >= player.seq[player.seqIdx].d) {
     player.seqT = 0;
@@ -1191,7 +1209,7 @@ function drawPlayer() {
     ctx.shadowBlur = 10;
   }
   const eyes = currentEyes();
-  clippyDraw.drawBody();
+  ctx.drawImage(clippyBody, 0, 0);
   clippyDraw.drawEyes(eyes.pdx, eyes.pdy, eyes.blink);
   ctx.restore();
   ctx.shadowBlur = 0;
@@ -1211,6 +1229,20 @@ function obstacleBox(o) {
 function addScore(n) {
   game.score += n * (game.multT > 0 ? 2 : 1);
 }
+
+// one shared apply path for every power-up; sfx/quip default to the kind name
+const PICKUP_FX = {
+  cd:     { apply: () => { player.inv = 60 * 6; }, score: 100, sfx: 'power', quip: 'power',
+            burst: [['#ff4040', '#ffe66e', '#40ff70', '#40a0ff', '#e040ff'], 22, 3] },
+  coffee: { apply: () => { game.multT = 60 * 9; },      burst: [['#6b4226', '#a67447', '#ffffff'], 10, 2.5] },
+  save:   { apply: () => { player.autosave = true; },   burst: [['#ffd24a', '#ffe66e', '#ffffff'], 12, 2.5] },
+  modem:  { apply: () => { game.slowmoT = 60 * 6; },    burst: [['#40ff70', '#ff4040', '#c0c0c0'], 10, 2.5] },
+  card:   { apply: () => cardBomb() },   // cardBomb does its own fireworks
+  magnet: { apply: () => { game.magnetT = 60 * 8; },    burst: [['#cc2020', '#c8c8d4', '#4a5cc8'], 10, 2.5] },
+  glide:  { apply: () => { player.glideT = 60 * 7; }, quipDur: 180,
+            burst: [['#ffffff', '#e8e8f0', '#c0d8ff'], 10, 2.5] },
+  zoom:   { apply: () => { player.tinyT = 60 * 8; },    burst: [['#8098c0', '#ffffff', '#404040'], 10, 2.5] },
+};
 
 function updateWorld() {
   const ts = game.slowmoT > 0 ? 0.45 : 1;   // 56k slow-mo
@@ -1251,6 +1283,9 @@ function updateWorld() {
     o.x -= sp;
     if (o.type === 'hourglass') {
       o.hitY = o.baseY + Math.sin(game.frame * 0.06 + o.ph) * o.amp;
+    } else if (o.type === 'banner') {
+      // wobble lives in the update phase so hitbox and pixels agree
+      o.hitY = o.y + Math.sin(game.frame * 0.08 + o.x * 0.01) * 3;
     }
     const box = obstacleBox(o);
     if (!o.dead && overlap(pbox, box)) {
@@ -1295,53 +1330,13 @@ function updateWorld() {
         burst(cn.x + 7, cn.y + 7, ['#ffe66e', '#ffffff', '#4a5cc8'], 6, 2);
         Sfx.coin();
         if (game.floppies === 5) quip(QUIPS.floppy5);
-      } else if (cn.kind === 'cd') {
-        player.inv = 60 * 6;
-        addScore(100);
-        burst(cn.x + 11, cn.y + 11, ['#ff4040', '#ffe66e', '#40ff70', '#40a0ff', '#e040ff'], 22, 3);
-        Sfx.power();
-        say(QUIPS.power, 160);
-      } else if (cn.kind === 'coffee') {
-        game.multT = 60 * 9;
-        addScore(50);
-        burst(cn.x + 11, cn.y + 11, ['#6b4226', '#a67447', '#ffffff'], 10, 2.5);
-        Sfx.coffee();
-        say(QUIPS.coffee, 160);
-      } else if (cn.kind === 'save') {
-        player.autosave = true;
-        addScore(50);
-        burst(cn.x + 11, cn.y + 11, ['#ffd24a', '#ffe66e', '#ffffff'], 12, 2.5);
-        Sfx.save();
-        say(QUIPS.save, 160);
-      } else if (cn.kind === 'modem') {
-        game.slowmoT = 60 * 6;
-        addScore(50);
-        burst(cn.x + 11, cn.y + 11, ['#40ff70', '#ff4040', '#c0c0c0'], 10, 2.5);
-        Sfx.modem();
-        say(QUIPS.modem, 160);
-      } else if (cn.kind === 'card') {
-        addScore(50);
-        cardBomb();
-        Sfx.card();
-        say(QUIPS.card, 160);
-      } else if (cn.kind === 'magnet') {
-        game.magnetT = 60 * 8;
-        addScore(50);
-        burst(cn.x + 11, cn.y + 11, ['#cc2020', '#c8c8d4', '#4a5cc8'], 10, 2.5);
-        Sfx.magnet();
-        say(QUIPS.magnet, 160);
-      } else if (cn.kind === 'glide') {
-        player.glideT = 60 * 7;
-        addScore(50);
-        burst(cn.x + 11, cn.y + 11, ['#ffffff', '#e8e8f0', '#c0d8ff'], 10, 2.5);
-        Sfx.glide();
-        say(QUIPS.glide, 180);
-      } else if (cn.kind === 'zoom') {
-        player.tinyT = 60 * 8;
-        addScore(50);
-        burst(cn.x + 11, cn.y + 11, ['#8098c0', '#ffffff', '#404040'], 10, 2.5);
-        Sfx.zoom();
-        say(QUIPS.zoom, 160);
+      } else {
+        const fx = PICKUP_FX[cn.kind];
+        fx.apply();
+        addScore(fx.score || 50);
+        if (fx.burst) burst(cn.x + 11, cn.y + 11, fx.burst[0], fx.burst[1], fx.burst[2]);
+        Sfx[fx.sfx || cn.kind]();
+        say(QUIPS[fx.quip || cn.kind], fx.quipDur || 160);
       }
     }
   }
@@ -1493,6 +1488,7 @@ function updateProjectiles(ts) {
       } else if (player.graceT === 0) {
         p.dead = true;
         crash();
+        if (game.state !== STATE.PLAY) return;   // dead: one crash is plenty
       }
     }
   }
@@ -1726,7 +1722,7 @@ function drawTitle() {
   ctx.translate(player.cx, player.bottomY + (Math.floor(game.frame / 40) % 5 === 0 ? HOP_PATTERN[Math.floor(game.frame / 3) % 10] * 2 : 0));
   ctx.translate(-13 * PXC, -35 * PXC);
   const eyes = currentEyes();
-  clippyDraw.drawBody();
+  ctx.drawImage(clippyBody, 0, 0);
   clippyDraw.drawEyes(eyes.pdx, eyes.pdy, eyes.blink);
   ctx.restore();
 
@@ -1858,7 +1854,7 @@ function drawBoss() {
     ctx.globalAlpha = 0.5;   // hung-window flicker
   }
   ctx.translate(b.x - 13 * PXB, b.bottomY - 35 * PXB);
-  evilDraw.drawBody();
+  ctx.drawImage(evilBody, 0, 0);
   const blink = (b.t % 150) < 6;
   evilDraw.drawEyes(-1, b.phase === 'charge' ? 0 : (player.bottomY < b.bottomY - 60 ? -1 : 0), blink);
   ctx.restore();
@@ -2076,7 +2072,7 @@ function tick() {
   if (game.state === STATE.BOOT) {
     drawBoot();
   } else if (game.state === STATE.TITLE) {
-    player.seqT++; updateEyesOnly();
+    advanceEyes();
     drawTitle();
   } else if (game.state === STATE.PLAY) {
     if (!game.paused) {
@@ -2111,17 +2107,6 @@ function tick() {
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.drawImage(scanCanvas, 0, 0);
-}
-
-function updateEyesOnly() {
-  if (player.seqT >= player.seq[player.seqIdx].d) {
-    player.seqT = 0;
-    player.seqIdx++;
-    if (player.seqIdx >= player.seq.length) {
-      player.seqIdx = 0;
-      player.seq = IDLE_SEQUENCES[Math.floor(Math.random() * IDLE_SEQUENCES.length)];
-    }
-  }
 }
 
 // teaches touch players where the duck zone is, then fades away
@@ -2234,6 +2219,10 @@ canvas.addEventListener('pointerup', releasePointer);
 canvas.addEventListener('pointercancel', releasePointer);
 
 window.addEventListener('blur', () => {
+  // releases fired while unfocused never reach us: drop all held input
+  input.jumpHeld = false;
+  player.ducking = false;
+  activePointers.clear();
   if (game.state === STATE.PLAY && !game.paused) {
     game.paused = true;
     Sfx.stopMusic();
@@ -2262,6 +2251,12 @@ document.addEventListener('click', () => {
 });
 
 function showDialog(title, icon, html) {
+  // a modal on top of a live game is a death sentence: pause first
+  if (game.state === STATE.PLAY && !game.paused) {
+    game.paused = true;
+    Sfx.stopMusic();
+    setStatus('Paused.');
+  }
   document.getElementById('dlgTitle').textContent = title;
   document.getElementById('dlgBigIcon').textContent = icon;
   document.getElementById('dlgText').innerHTML = html;
