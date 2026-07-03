@@ -56,21 +56,30 @@ get him.
 Active effects show as beveled tags under the score bar and blink when about
 to expire. Effects stack — coffee-doubled card bombs are the path to big scores.
 
-### Boss: the Evil Twin
+### Bosses
 
-At 2,000 points the music turns minor and **`clippy.exe (Not Responding)`**
-flies in — Clippy's hung-process doppelgänger: half again his size, ghost-gray,
-red-eyed, flickering like a window that gave up in 1997.
+Every 2,500 points (starting at 2,000), the music turns minor and a boss
+arrives. They alternate, and both scale up on each return (more HP, faster
+attacks). The universal rule: **stomp the top**. HYPER mode lets you ram them;
+autosave gives you one free body-check.
+
+**The Evil Twin — `clippy.exe (Not Responding)`.** Clippy's hung-process
+doppelgänger: half again his size, ghost-gray, red-eyed, flickering like a
+window that gave up in 1997. He hovers at the edge of the screen lobbing
+spinning error dialogs, then flashes red, drops to the taskbar, and
+**charges** — that's your stomp window.
 
 ![Boss fight](docs/boss.png)
 
-He hovers at the edge of the screen lobbing spinning error dialogs, then flashes
-red, drops to the taskbar, and **charges**. That's your opening: **stomp his
-head** for 150 points and a bounce. Three stomps ends the task — he detonates
-into a Solitaire card storm, showers you with floppies, and pays a 500-point
-bounty. He respawns every 2,500 points after that, tougher each time (more HP,
-faster throws, meaner charges). HYPER mode lets you ram him; autosave gives you
-one free clip-to-clip collision.
+**START.EXE — The Button That Would Not Stop.** A giant, furious Start button
+(*"4% defragged"*) that finished defragmenting and is done waiting. It erupts
+full **Start-menu pillars** out of the taskbar (watch the hazard stripes),
+slides over your head, and **slams down**, sending shockwaves along the
+ground. While it sits there pressed-in and stunned — jump on it. Where do you
+want to go today? DOWN.
+
+Defeating either detonates a Solitaire card storm, a floppy shower, and a
+500-point bounty.
 
 Clippy provides unsolicited commentary throughout, naturally.
 *"It looks like you're trying to survive. Would you like help with that?"*
