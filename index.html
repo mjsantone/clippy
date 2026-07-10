@@ -492,7 +492,7 @@
    Pixel-art Clippy ported from the original Clippy.tsx canvas drawer
    ================================================================ */
 
-const GAME_VERSION = 'v1.1.0';   // bump on every release: it's how you know a deploy landed
+const GAME_VERSION = 'v1.1.1';   // bump on every release: it's how you know a deploy landed
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -3010,6 +3010,9 @@ function showDialog(title, icon, html, confirmLabel, onConfirm) {
   document.getElementById('dlgTitle').textContent = title;
   document.getElementById('dlgBigIcon').textContent = icon;
   document.getElementById('dlgText').innerHTML = html;
+  // dialogs reopen centered, wherever they were last dragged
+  const box = document.querySelector('#dlgOverlay .dlg');
+  box.style.left = box.style.top = box.style.transform = box.style.position = '';
   const cbtn = document.getElementById('dlgConfirm');
   const ok = document.getElementById('dlgOk');
   if (confirmLabel) {
@@ -3061,13 +3064,59 @@ document.getElementById('btnMin').addEventListener('click', () => minimizeGame()
 /* ---- maximize / fullscreen ---- */
 const appWindow = document.querySelector('.app-window');
 const btnMax = document.getElementById('btnMax');
+let preMaxStyle = null;   // dragged position to restore after un-maximizing
 
 function setMaximized(on) {
+  if (on) {
+    preMaxStyle = { left: appWindow.style.left, top: appWindow.style.top, transform: appWindow.style.transform };
+    appWindow.style.left = appWindow.style.top = appWindow.style.transform = '';
+  } else if (preMaxStyle) {
+    appWindow.style.left = preMaxStyle.left;
+    appWindow.style.top = preMaxStyle.top;
+    appWindow.style.transform = preMaxStyle.transform;
+  }
   appWindow.classList.toggle('maximized', on);
   btnMax.textContent = on ? '❐' : '▢';
   btnMax.title = on ? 'Restore' : 'Maximize';
   setStatus(on ? 'Maximized. All 640Kb of screen, as intended.' : 'Window restored.');
 }
+
+/* ---- draggable windows (desktop only), with click-to-front ---- */
+let topZ = 45;
+
+function makeDraggable(win, handle, skipWhen) {
+  let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+  win.addEventListener('pointerdown', () => { win.style.zIndex = ++topZ; });
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('.tbtn')) return;                        // window buttons still click
+    if (document.body.classList.contains('mobile-game')) return;  // no window management on phones
+    if (skipWhen && skipWhen()) return;
+    dragging = true;
+    const r = win.getBoundingClientRect();
+    // freeze the centering layout into absolute pixels once
+    win.style.position = 'fixed';
+    win.style.left = r.left + 'px';
+    win.style.top = r.top + 'px';
+    win.style.margin = '0';
+    win.style.transform = 'none';
+    sx = e.clientX; sy = e.clientY; ox = r.left; oy = r.top;
+    try { handle.setPointerCapture(e.pointerId); } catch (err) { /* synthetic events */ }
+    e.preventDefault();
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const nx = ox + e.clientX - sx, ny = oy + e.clientY - sy;
+    // keep enough titlebar on screen to grab it back
+    win.style.left = Math.min(window.innerWidth - 70, Math.max(70 - win.offsetWidth, nx)) + 'px';
+    win.style.top = Math.min(window.innerHeight - 50, Math.max(0, ny)) + 'px';
+  });
+  const endDrag = () => { dragging = false; };
+  handle.addEventListener('pointerup', endDrag);
+  handle.addEventListener('pointercancel', endDrag);
+}
+
+makeDraggable(appWindow, appWindow.querySelector('.titlebar'),
+  () => appWindow.classList.contains('maximized'));
 
 function toggleMaximize() {
   const on = !appWindow.classList.contains('maximized');
@@ -3121,6 +3170,7 @@ function minimizeGame() {
 
 function openGame() {
   appWindow.style.display = '';
+  appWindow.style.zIndex = ++topZ;
   taskClippy.style.display = '';
   taskClippy.classList.remove('min');
   appOpen = true;
@@ -3130,8 +3180,10 @@ function openGame() {
 }
 
 taskClippy.addEventListener('click', () => {
-  if (appOpen) minimizeGame();
-  else openGame();
+  if (!appOpen) { openGame(); return; }
+  // buried under another window: raise it; already on top: minimize
+  if (Number(appWindow.style.zIndex || 0) < topZ) appWindow.style.zIndex = ++topZ;
+  else minimizeGame();
 });
 
 // desktop icons: click selects, double-click launches
@@ -3163,6 +3215,7 @@ function launchApp(app) {
 
 function openBrowser() {
   browserWin.classList.add('open');
+  browserWin.style.zIndex = ++topZ;
   taskInternet.style.display = '';
   document.getElementById('siteVersion').textContent = GAME_VERSION;
   // the hit counter: every visitor is the 1337th-and-something
@@ -3179,9 +3232,16 @@ function closeBrowser() {
   taskInternet.style.display = 'none';
 }
 
+makeDraggable(browserWin, browserWin.querySelector('.titlebar'));
+const dlgBox = document.querySelector('#dlgOverlay .dlg');
+makeDraggable(dlgBox, dlgBox.querySelector('.titlebar'));
+
 document.getElementById('ieClose').addEventListener('click', closeBrowser);
 document.getElementById('ieMin').addEventListener('click', () => browserWin.classList.remove('open'));
-taskInternet.addEventListener('click', () => browserWin.classList.toggle('open'));
+taskInternet.addEventListener('click', () => {
+  if (!browserWin.classList.contains('open')) browserWin.classList.add('open');
+  browserWin.style.zIndex = ++topZ;   // taskbar click always brings it forward
+});
 document.getElementById('playNow97').addEventListener('click', (e) => {
   e.preventDefault();
   closeBrowser();
