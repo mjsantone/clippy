@@ -444,6 +444,10 @@ const Sfx = {
   bossDie(){ this.tone(700,0.5,'sawtooth',0.12,60); [523,659,784,1046,1318].forEach((f,i)=>setTimeout(()=>this.tone(f,0.2,'triangle',0.11),350+i*90)); },
   slam()   { this.tone(95,0.35,'sine',0.2,38); this.tone(60,0.3,'sawtooth',0.12,30); },
   menuPop(){ this.tone(480,0.07,'square',0.08,760); },
+  teaSip() { this.tone(990,0.06,'triangle',0.1); setTimeout(()=>this.tone(1320,0.1,'triangle',0.1),70); },
+  hrDing() { this.tone(660,0.25,'triangle',0.13); setTimeout(()=>this.tone(880,0.4,'triangle',0.13),240); },
+  spill()  { [520,430,340,260].forEach((f,i)=>setTimeout(()=>this.tone(f,0.12,'sawtooth',0.09),i*70)); this.tone(85,0.5,'sine',0.1,45); },
+  gossip() { this.tone(1500,0.05,'square',0.06,1800); },
   chime()  { [330,415,494,659].forEach((f,i)=>setTimeout(()=>this.tone(f,0.9,'triangle',0.10),i*120)); },
   // ------ music ------
   mode: 'normal',
@@ -576,6 +580,12 @@ const QUIPS = {
   startIntro:"The Start button finished defragmenting... and it is DONE waiting. Dodge the menus, stomp it when it slams!",
   startHit: "Right on the flag! Where do you want to go today? DOWN.",
   startDead:"Start has been shut down. It is now safe to turn off your paperclip.",
+  tea:      "Ooh, tea! ☕ Tell me EVERYTHING.",
+  teaSpill: "TOO MUCH TEA!! HR has been notified. RUN.",
+  hrGone:   "HR gave up. The tea stays between us.",
+  teaIntro: "The Internal Tea! Every big company brews one. DO NOT let it spill on you.",
+  teaHit:   "Steeped! Per my last stomp—",
+  teaDead:  "Tea contained. Nothing leaked. (Everything leaked.)",
   smash:    "It looks like that window stopped responding.",
   floppy5:  "You've got floppy! That's 1.44 MB of pure skill.",
   zone:     "Now entering: ",
@@ -610,6 +620,8 @@ const game = {
   bossesKilled: 0,
   nextBossScore: 2000,
   forceBossKind: null,
+  teaStreak: 0,       // consecutive cups of tea — gossip pays, until it spills
+  teaStreakT: 0,
   bubbleText: '',
   bubbleT: 0,
   quipCooldown: 0,
@@ -671,7 +683,7 @@ function resetRun() {
   game.nextSpawnX = W + 220;
   game.multT = 0; game.slowmoT = 0; game.magnetT = 0; game.lastPowerDist = 0;
   game.boss = null; game.projectiles = []; game.bossesKilled = 0; game.nextBossScore = 2000;
-  game.forceBossKind = null;
+  game.forceBossKind = null; game.teaStreak = 0; game.teaStreakT = 0;
   Sfx.setMode('normal');
   game.bubbleT = 0; game.quipCooldown = 0; game.flags = {};
   player.bottomY = GROUND_Y; player.vy = 0; player.grounded = true;
@@ -1061,8 +1073,9 @@ function spawnCoins(x) {
   }
   // power-ups appear on coin slots, rate-limited by distance
   const POWERS = [
-    { kind: 'coffee', min: 500 }, { kind: 'magnet', min: 600 }, { kind: 'cd', min: 700 },
-    { kind: 'save', min: 800 }, { kind: 'glide', min: 900 }, { kind: 'modem', min: 1000 },
+    { kind: 'tea', min: 400 }, { kind: 'coffee', min: 500 }, { kind: 'magnet', min: 600 },
+    { kind: 'cd', min: 700 }, { kind: 'save', min: 800 }, { kind: 'glide', min: 900 },
+    { kind: 'tea', min: 950 }, { kind: 'modem', min: 1000 },
     { kind: 'zoom', min: 1200 }, { kind: 'card', min: 1300 },
   ];
   if (game.dist - game.lastPowerDist > 900 && Math.random() < 0.55) {
@@ -1330,7 +1343,28 @@ const PICKUP_FX = {
   glide:  { apply: () => { player.glideT = 60 * 7; }, quipDur: 180,
             burst: [['#ffffff', '#e8e8f0', '#c0d8ff'], 10, 2.5] },
   zoom:   { apply: () => { player.tinyT = 60 * 8; },    burst: [['#8098c0', '#ffffff', '#404040'], 10, 2.5] },
+  tea:    { apply: () => {
+              game.teaStreak++;
+              game.teaStreakT = 60 * 12;
+              if (game.teaStreak >= 4) {
+                // word got around
+                game.teaStreak = 0;
+                spawnHR();
+                Sfx.hrDing();
+                return 'teaSpill';
+              }
+              addScore(50 * game.teaStreak);   // gossip compounds: +50/+100/+150
+              return null;
+            }, score: 0, sfx: 'teaSip',
+            burst: [['#b97a2a', '#f0f0f4', '#ffe66e'], 8, 2] },
 };
+
+function spawnHR() {
+  game.projectiles.push({
+    type: 'hr', x: W + 20, y: 110, w: 58, h: 32,
+    vx: -2.5, vy: 0.4, t: 0,
+  });
+}
 
 function updateWorld() {
   const ts = game.slowmoT > 0 ? 0.45 : 1;   // 56k slow-mo
@@ -1343,6 +1377,10 @@ function updateWorld() {
   if (game.multT > 0) game.multT--;
   if (game.slowmoT > 0) game.slowmoT--;
   if (game.magnetT > 0) game.magnetT--;
+  if (game.teaStreakT > 0) {
+    game.teaStreakT--;
+    if (game.teaStreakT === 0) game.teaStreak = 0;   // the gossip goes cold
+  }
 
   // zone announcements
   const zi = Math.min(ZONES.length - 1, Math.floor(game.score / 1500));
@@ -1420,11 +1458,11 @@ function updateWorld() {
         if (game.floppies === 5) quip(QUIPS.floppy5);
       } else {
         const fx = PICKUP_FX[cn.kind];
-        fx.apply();
-        addScore(fx.score || 50);
+        const quipOverride = fx.apply();
+        addScore(fx.score !== undefined ? fx.score : 50);
         if (fx.burst) burst(cn.x + 11, cn.y + 11, fx.burst[0], fx.burst[1], fx.burst[2]);
         Sfx[fx.sfx || cn.kind]();
-        say(QUIPS[fx.quip || cn.kind], fx.quipDur || 160);
+        say(QUIPS[quipOverride || fx.quip || cn.kind], fx.quipDur || 160);
       }
     }
   }
@@ -1441,33 +1479,67 @@ const BOSS_BODY_W = 42, BOSS_BODY_H = 93;   // twin: visible rows 3..34 at PXB=3
 const SBTN_W = 118, SBTN_H = 46;            // START.EXE button dimensions
 const SBTN_HOVER = GROUND_Y - 168;          // bottomY while hovering
 
+const TEA_W = 88, TEA_H = 62;               // TEA.EXE cup dimensions
+const TEA_HOVER = GROUND_Y - 150;
+
 function startBoss() {
   const lvl = game.bossesKilled;
   const hp = 3 + Math.min(2, lvl);
-  // bosses alternate: evil twin, then the Start button, then twin again...
-  const kind = game.forceBossKind || (game.bossesKilled % 2 === 1 ? 'start' : 'twin');
+  // boss rotation: evil twin -> START.EXE -> TEA.EXE -> repeat
+  const ROTATION = ['twin', 'start', 'tea'];
+  const kind = game.forceBossKind || ROTATION[game.bossesKilled % ROTATION.length];
   game.forceBossKind = null;
+  const baseY = kind === 'start' ? SBTN_HOVER : kind === 'tea' ? TEA_HOVER : GROUND_Y - 132;
   game.boss = {
     kind, lvl, hp, maxHp: hp,
     x: W + 90,
-    bottomY: kind === 'start' ? SBTN_HOVER : GROUND_Y - 132,
-    baseY: kind === 'start' ? SBTN_HOVER : GROUND_Y - 132,
+    bottomY: baseY, baseY,
     phase: 'enter', t: 0, throws: 0, hitCd: 0, targetX: 0,
   };
   game.projectiles = [];
   Sfx.alarm();
   Sfx.setMode('boss');
-  say(kind === 'start' ? QUIPS.startIntro : QUIPS.bossIntro, 220);
-  setStatus(kind === 'start'
-    ? 'WARNING: START.EXE is awake. Mind the menus.'
-    : 'WARNING: clippy.exe (Not Responding). End task by stomping.');
+  const intro = { twin: QUIPS.bossIntro, start: QUIPS.startIntro, tea: QUIPS.teaIntro };
+  say(intro[kind], 220);
+  const status = {
+    twin: 'WARNING: clippy.exe (Not Responding). End task by stomping.',
+    start: 'WARNING: START.EXE is awake. Mind the menus.',
+    tea: 'WARNING: TEA.EXE is brewing. Do not forward.',
+  };
+  setStatus(status[kind]);
 }
 
 function bossBox(b) {
   if (b.kind === 'start') {
     return { x: b.x - SBTN_W / 2, y: b.bottomY - SBTN_H, w: SBTN_W, h: SBTN_H };
   }
+  if (b.kind === 'tea') {
+    return { x: b.x - TEA_W / 2, y: b.bottomY - TEA_H, w: TEA_W, h: TEA_H };
+  }
   return { x: b.x - BOSS_BODY_W / 2, y: b.bottomY - BOSS_BODY_H, w: BOSS_BODY_W, h: BOSS_BODY_H };
+}
+
+const GOSSIP_TEXTS = ['fwd: fwd: fwd:', 'did u hear??', 're: re: re:', 'per my last', 'CONFIDENTIAL', 'reply-all 😱'];
+
+function spawnGossip(b) {
+  game.projectiles.push({
+    type: 'gossip', x: b.x - 50, y: b.bottomY - 44, w: 56, h: 24,
+    vx: -(2.4 + b.lvl * 0.3), t: 0, txt: pick(GOSSIP_TEXTS),
+  });
+  Sfx.gossip();
+}
+
+function spawnTide(x, lvl) {
+  game.projectiles.push({
+    type: 'tide', x, y: GROUND_Y - 20, w: 36, h: 20,
+    vx: -(3.2 + lvl * 0.4), t: 0,
+  });
+}
+
+function spawnPuddle(x) {
+  game.projectiles.push({
+    type: 'puddle', x: x - 36, y: GROUND_Y - 8, w: 72, h: 8, t: 0,
+  });
 }
 
 function spawnPillar(x) {
@@ -1490,7 +1562,10 @@ function damageBoss(b) {
   b.hitCd = 45;
   game.shake = 8;
   const bb = bossBox(b);
-  burst(b.x, bb.y + 20, ['#3e3e46', '#8a8a96', '#cc1010', '#ffffff'], 14, 4);
+  const shards = b.kind === 'tea'
+    ? ['#f0f0f4', '#b97a2a', '#7a4a18', '#ffffff']
+    : ['#3e3e46', '#8a8a96', '#cc1010', '#ffffff'];
+  burst(b.x, bb.y + 20, shards, 14, 4);
   if (b.hp <= 0) {
     b.phase = 'dying'; b.t = 0;
     game.projectiles = [];
@@ -1498,7 +1573,7 @@ function damageBoss(b) {
   } else {
     b.phase = 'stagger'; b.t = 0;
     Sfx.bossHit();
-    quip(QUIPS.bossHit);
+    quip(QUIPS[b.kind === 'start' ? 'startHit' : b.kind === 'tea' ? 'teaHit' : 'bossHit']);
   }
 }
 
@@ -1531,10 +1606,14 @@ function bossDeathTick(b) {
     game.boss = null;
     game.nextSpawnX = game.dist + 380;
     Sfx.setMode('normal');
-    say(b.kind === 'start' ? QUIPS.startDead : QUIPS.bossDead, 180);
-    setStatus(b.kind === 'start'
-      ? 'START.EXE shut down. It is now safe to keep running.'
-      : 'Evil twin terminated. It is once again safe to run.');
+    const deadQuip = { twin: QUIPS.bossDead, start: QUIPS.startDead, tea: QUIPS.teaDead };
+    say(deadQuip[b.kind], 180);
+    const deadStatus = {
+      twin: 'Evil twin terminated. It is once again safe to run.',
+      start: 'START.EXE shut down. It is now safe to keep running.',
+      tea: 'TEA.EXE contained. This thread has been archived.',
+    };
+    setStatus(deadStatus[b.kind]);
     return true;
   }
   return false;
@@ -1597,6 +1676,42 @@ function updateStartBoss(b, ts) {
   }
 }
 
+function updateTeaBoss(b, ts) {
+  if (b.phase === 'enter') {
+    b.x -= 3.2 * ts;
+    b.bottomY += (b.baseY - b.bottomY) * 0.08;
+    if (b.x <= 470) { b.x = 470; b.phase = 'gossip'; b.t = 0; b.throws = 0; }
+  } else if (b.phase === 'gossip') {
+    b.bottomY = b.baseY + Math.sin(b.t * 0.045) * 12;
+    b.x = 470 + Math.sin(b.t * 0.02) * 40;   // drifts around while it gossips
+    const cadence = Math.max(56, 84 - b.lvl * 8);
+    if (b.t > 0 && b.t % cadence === 0) { spawnGossip(b); b.throws++; }
+    if (b.throws >= 3 + Math.min(2, b.lvl)) { b.phase = 'tilt'; b.t = 0; }
+  } else if (b.phase === 'tilt') {
+    // leaning over: the tea is about to spill
+    b.bottomY = b.baseY + rnd(-2, 2);
+    if (b.t > 48) {
+      b.phase = 'spill'; b.t = 0;
+      spawnTide(b.x - TEA_W / 2, b.lvl);
+      spawnPuddle(rnd(200, 560));
+      spawnPuddle(rnd(200, 560));
+      Sfx.spill();
+      game.shake = 8;
+    }
+  } else if (b.phase === 'spill') {
+    if (b.t === 16) spawnTide(b.x - TEA_W / 2, b.lvl);   // second slosh
+    if (b.t > 34) { b.phase = 'refill'; b.t = 0; }
+  } else if (b.phase === 'refill') {
+    // empty and heavy: sinks to the taskbar to re-steep — stomp it!
+    b.bottomY = Math.min(GROUND_Y, b.bottomY + 9 * ts);
+    if (b.bottomY >= GROUND_Y && b.t > 95) { b.phase = 'rise'; b.t = 0; }
+  } else if (b.phase === 'rise' || b.phase === 'stagger') {
+    b.bottomY += (b.baseY - b.bottomY) * 0.12;
+    b.x += (470 - b.x) * 0.06;
+    if (b.t > 42) { b.phase = 'gossip'; b.t = 0; b.throws = 0; }
+  }
+}
+
 function updateTwinBoss(b, ts) {
   if (b.phase === 'enter') {
     b.x -= 3.2 * ts;
@@ -1634,6 +1749,7 @@ function updateBoss(ts) {
   }
 
   if (b.kind === 'start') updateStartBoss(b, ts);
+  else if (b.kind === 'tea') updateTeaBoss(b, ts);
   else updateTwinBoss(b, ts);
 
   // stomp + body collision (no body while exploding or knocked back)
@@ -1655,10 +1771,28 @@ function updateProjectiles(ts) {
       else if (p.t < RISE_AT + RISE_LEN + HOLD) { p.h = p.maxH; }
       else { p.h -= p.maxH / 14; if (p.h <= 3) { p.dead = true; continue; } }
       p.y = GROUND_Y - p.h;
-    } else if (p.type === 'wave') {
+    } else if (p.type === 'wave' || p.type === 'tide') {
       p.t++;
       p.x += p.vx * ts;
-      if (p.t > 150 || p.x < -30 || p.x > W + 30) { p.dead = true; continue; }
+      if (p.t > 200 || p.x < -40 || p.x > W + 40) { p.dead = true; continue; }
+    } else if (p.type === 'gossip') {
+      p.t++;
+      p.x += p.vx * ts;
+      p.y += Math.sin(p.t * 0.08) * 0.9 + ((player.bottomY - 44) - p.y) * 0.006;
+      if (p.x < -70) { p.dead = true; continue; }
+    } else if (p.type === 'puddle') {
+      p.t++;
+      if (p.t > 300) { p.dead = true; continue; }
+    } else if (p.type === 'hr') {
+      // the meeting request hunts you — escapable, but only just
+      p.t++;
+      p.vx += (player.cx - p.w / 2 > p.x ? 0.08 : -0.08);
+      p.vy += (player.bottomY - 44 - p.h / 2 > p.y ? 0.05 : -0.05);
+      p.vx = Math.max(-3.0, Math.min(3.0, p.vx));
+      p.vy = Math.max(-1.8, Math.min(1.8, p.vy));
+      p.x += p.vx * ts; p.y += p.vy * ts;
+      if (p.y > GROUND_Y - p.h) p.y = GROUND_Y - p.h;
+      if (p.t > 300) { p.dead = true; quip(QUIPS.hrGone); continue; }
     } else {
       p.x += p.vx * ts; p.y += p.vy * ts; p.rot += 0.13;
       if (p.y > GROUND_Y - 12) {   // shatters on the taskbar
@@ -1780,6 +1914,8 @@ function drawBadges() {
   if (game.multT > 0)     badges.push(['2X PTS', '#7a3b00', game.multT]);
   if (game.slowmoT > 0)   badges.push(['56K SLO-MO', '#004080', game.slowmoT]);
   if (game.magnetT > 0)   badges.push(['DEFRAG', '#a02020', game.magnetT]);
+  if (game.teaStreak > 0) badges.push(['TEA x' + game.teaStreak,
+                                       game.teaStreak >= 3 ? '#a00000' : '#7a4a18', game.teaStreakT]);
   if (player.glideT > 0)  badges.push(['AIRMAIL', '#3a5a8a', player.glideT]);
   if (player.tinyT > 0)   badges.push(['ZOOM 50%', '#5a2a7a', player.tinyT]);
   if (player.autosave)    badges.push(['AUTOSAVED', '#0a7a2a', -1]);
@@ -2084,10 +2220,94 @@ function drawStartBoss(b) {
   }
 }
 
+function drawTeaBoss(b) {
+  const w = TEA_W, h = TEA_H;
+  const x = b.x - w / 2, y = b.bottomY - h;
+  const tilt = b.phase === 'tilt' ? Math.min(0.5, b.t * 0.012) : (b.phase === 'spill' ? 0.5 : 0);
+
+  ctx.save();
+  if (b.phase === 'dying') {
+    ctx.globalAlpha = Math.max(0.1, 1 - b.t / 64);
+    ctx.translate(rnd(-3, 3), rnd(-3, 3));
+  }
+  ctx.translate(b.x, b.bottomY - h / 2);
+  ctx.rotate(-tilt);
+  ctx.translate(-w / 2, -h / 2);
+
+  // saucer
+  ctx.fillStyle = '#c8c8d0';
+  ctx.beginPath(); ctx.ellipse(w / 2, h - 2, w / 2 + 8, 6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#e8e8ee';
+  ctx.beginPath(); ctx.ellipse(w / 2, h - 4, w / 2 + 4, 4, 0, 0, Math.PI * 2); ctx.fill();
+  // cup body
+  ctx.fillStyle = '#f0f0f4'; ctx.fillRect(4, 8, w - 8, h - 14);
+  ctx.fillStyle = '#c8c8d0'; ctx.fillRect(4, h - 12, w - 8, 6);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(4, 8, w - 8, 4);
+  // handle
+  ctx.strokeStyle = '#e0e0e6'; ctx.lineWidth = 7;
+  ctx.beginPath(); ctx.arc(w + 2, h / 2 + 2, 13, -Math.PI / 2, Math.PI / 2); ctx.stroke();
+  // tea surface (drains as it spills, empty while refilling)
+  const empty = b.phase === 'refill' || b.phase === 'rise';
+  if (!empty) {
+    ctx.fillStyle = '#7a4a18';
+    ctx.beginPath(); ctx.ellipse(w / 2, 10, w / 2 - 7, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#b97a2a';
+    ctx.beginPath(); ctx.ellipse(w / 2 - 5, 9, w / 3 - 4, 3, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  // angry eyes + brows on the cup face
+  ctx.fillStyle = '#181820';
+  ctx.fillRect(w / 2 - 20, 24, 8, 8); ctx.fillRect(w / 2 + 12, 24, 8, 8);
+  ctx.fillRect(w / 2 - 22, 19, 11, 3); ctx.fillRect(w / 2 + 11, 19, 11, 3);
+  ctx.fillStyle = '#cc1010';
+  ctx.fillRect(w / 2 - 18, 26, 4, 4); ctx.fillRect(w / 2 + 14, 26, 4, 4);
+  // teabag tag on a string
+  ctx.strokeStyle = '#a0a0a8'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(10, 10); ctx.lineTo(2, 30); ctx.stroke();
+  ctx.fillStyle = '#ffe66e'; ctx.fillRect(-8, 30, 22, 12);
+  ctx.fillStyle = '#000000'; ctx.font = 'bold 6px monospace';
+  ctx.fillText('HOT', -5, 36); ctx.fillText('GOSS', -6, 41);
+  ctx.restore();
+
+  // steam wisps (double while re-steeping)
+  if (b.phase !== 'dying') {
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    const n = (b.phase === 'refill') ? 5 : 3;
+    for (let i = 0; i < n; i++) {
+      const sx = b.x - 24 + i * 12 + Math.sin(game.frame * 0.1 + i * 2) * 4;
+      const sy = b.bottomY - h - 8 - ((game.frame * 0.8 + i * 13) % 26);
+      ctx.fillRect(sx, sy, 3, 5);
+    }
+  }
+
+  // pouring stream while tilted
+  if (tilt > 0.3) {
+    ctx.fillStyle = '#b97a2a';
+    ctx.fillRect(x - 12, y + 18, 7, GROUND_Y - y - 18);
+    ctx.fillStyle = '#d89a4a';
+    ctx.fillRect(x - 10, y + 18, 3, GROUND_Y - y - 18);
+  }
+
+  // red warning flash during the tilt telegraph
+  if (b.phase === 'tilt' && Math.floor(b.t / 5) % 2 === 0) {
+    ctx.fillStyle = 'rgba(255,0,0,0.18)';
+    ctx.fillRect(x - 8, y - 8, w + 20, h + 16);
+  }
+
+  // floating tooltip
+  if (b.phase !== 'dying') {
+    const tw = 128, tx = b.x - tw / 2, ty = y - 30;
+    ctx.fillStyle = '#c0c0c0'; ctx.fillRect(tx - 2, ty - 2, tw + 4, 18);
+    ctx.fillStyle = '#000080'; ctx.fillRect(tx, ty, tw, 14);
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 8px monospace';
+    ctx.fillText('TEA.EXE — do not forward', tx + 5, ty + 10);
+  }
+}
+
 function drawBoss() {
   const b = game.boss;
   if (!b) return;
   if (b.kind === 'start') { drawStartBoss(b); return; }
+  if (b.kind === 'tea') { drawTeaBoss(b); return; }
   const flicker = b.phase !== 'dying' && (b.t % 44) < 5;
 
   ctx.save();
@@ -2150,10 +2370,67 @@ function drawWave(p) {
   ctx.fillStyle = '#808080'; ctx.fillRect(p.x + 6, p.y + 5, p.w - 12, 2);
 }
 
+function drawTide(p) {
+  // a surging slosh of hot tea
+  ctx.fillStyle = '#b97a2a';
+  ctx.fillRect(p.x, p.y + 5, p.w, p.h - 5);
+  ctx.fillRect(p.x + 5, p.y, p.w - 10, 6);
+  ctx.fillStyle = '#d89a4a'; ctx.fillRect(p.x + 5, p.y, p.w - 10, 3);
+  ctx.fillStyle = '#ffffff';   // foam
+  const f = Math.floor(game.frame / 6) % 2;
+  ctx.fillRect(p.x + 4 + f * 3, p.y - 2, 4, 3); ctx.fillRect(p.x + p.w - 12 - f * 3, p.y - 1, 4, 3);
+}
+
+function drawPuddle(p) {
+  const fade = p.t > 240 ? (300 - p.t) / 60 : 1;
+  ctx.globalAlpha = 0.85 * fade;
+  ctx.fillStyle = '#b97a2a';
+  ctx.beginPath(); ctx.ellipse(p.x + p.w / 2, GROUND_Y - 3, p.w / 2, 5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#d89a4a';
+  ctx.beginPath(); ctx.ellipse(p.x + p.w / 2 - 6, GROUND_Y - 5, p.w / 3, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+  // steam
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  const s = Math.floor((game.frame + p.x) / 8) % 3;
+  ctx.fillRect(p.x + 14 + s * 2, GROUND_Y - 16 - s * 3, 2, 3);
+  ctx.fillRect(p.x + p.w - 20 - s * 2, GROUND_Y - 20 + s * 2, 2, 3);
+  ctx.globalAlpha = 1;
+}
+
+function drawGossip(p) {
+  ctx.fillStyle = '#ffffcc';
+  ctx.strokeStyle = '#000000'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(p.x, p.y, p.w, p.h, 5); else ctx.rect(p.x, p.y, p.w, p.h);
+  ctx.fill(); ctx.stroke();
+  ctx.beginPath();   // tail
+  ctx.moveTo(p.x + p.w - 12, p.y + p.h); ctx.lineTo(p.x + p.w - 2, p.y + p.h + 8); ctx.lineTo(p.x + p.w - 24, p.y + p.h);
+  ctx.closePath(); ctx.fillStyle = '#ffffcc'; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#000000'; ctx.font = 'bold 7px monospace';
+  ctx.fillText(p.txt, p.x + 5, p.y + 15);
+}
+
+function drawHR(p) {
+  // MANDATORY meeting request, in hot pursuit
+  const flash = Math.floor(game.frame / 8) % 2 === 0;
+  bevelRect(p.x, p.y, p.w, p.h, true);
+  ctx.fillStyle = flash ? '#cc0000' : '#000080';
+  ctx.fillRect(p.x + 3, p.y + 3, p.w - 6, 10);
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 7px monospace';
+  ctx.fillText('MEETING REQ', p.x + 6, p.y + 11);
+  ctx.fillStyle = '#000000';
+  ctx.fillText('HR re: tea', p.x + 6, p.y + 24);
+  ctx.fillStyle = '#cc0000'; ctx.font = 'bold 10px monospace';
+  ctx.fillText('!', p.x + p.w - 10, p.y + 25);
+}
+
 function drawProjectiles() {
   for (const p of game.projectiles) {
     if (p.type === 'pillar') { drawPillar(p); continue; }
     if (p.type === 'wave') { drawWave(p); continue; }
+    if (p.type === 'tide') { drawTide(p); continue; }
+    if (p.type === 'puddle') { drawPuddle(p); continue; }
+    if (p.type === 'gossip') { drawGossip(p); continue; }
+    if (p.type === 'hr') { drawHR(p); continue; }
     ctx.save();
     ctx.translate(p.x + p.w / 2, p.y + p.h / 2);
     ctx.rotate(p.rot);
@@ -2179,7 +2456,9 @@ function drawBossBar() {
   ctx.fillStyle = '#000000'; ctx.font = 'bold 8px monospace';
   ctx.fillText(b.kind === 'start'
     ? 'START.EXE — The Button That Would Not Stop'
-    : 'EVIL TWIN — clippy.exe (Not Responding)', x + 6, y + 10);
+    : b.kind === 'tea'
+      ? 'TEA.EXE — The Internal Tea (Do Not Forward)'
+      : 'EVIL TWIN — clippy.exe (Not Responding)', x + 6, y + 10);
   // sunken segmented meter, like a defrag bar gone wrong
   ctx.fillStyle = '#808080'; ctx.fillRect(x + 5, y + 13, w - 10, 10);
   ctx.fillStyle = '#ffffff'; ctx.fillRect(x + 5, y + 22, w - 10, 1);
@@ -2209,6 +2488,20 @@ function drawCollectible(cn) {
   else if (cn.kind === 'magnet') drawMagnet(cn);
   else if (cn.kind === 'glide') drawPaperPlane(cn);
   else if (cn.kind === 'zoom') drawMagnifier(cn);
+  else if (cn.kind === 'tea') drawTeaCup(cn);
+}
+
+function drawTeaCup(cn) {
+  const bob = Math.sin(game.frame * 0.09 + cn.x * 0.03) * 3;
+  const x = cn.x + 2, y = cn.y + 6 + bob;
+  ctx.fillStyle = '#c8c8d0'; ctx.fillRect(x - 1, y + 11, 18, 2);   // saucer
+  ctx.fillStyle = '#f0f0f4'; ctx.fillRect(x + 1, y + 2, 13, 9);    // cup
+  ctx.fillStyle = '#f0f0f4'; ctx.fillRect(x + 14, y + 4, 3, 5);    // handle
+  ctx.fillStyle = '#008080'; ctx.fillRect(x + 15, y + 5, 1, 3);
+  ctx.fillStyle = '#b97a2a'; ctx.fillRect(x + 2, y + 2, 11, 3);    // tea
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';                        // steam
+  const st = Math.floor(game.frame / 8) % 3;
+  ctx.fillRect(x + 4 + st, y - 4, 2, 2); ctx.fillRect(x + 9 - st, y - 8, 2, 2);
 }
 
 function drawMagnet(cn) {
