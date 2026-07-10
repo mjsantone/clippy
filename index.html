@@ -312,6 +312,8 @@
    Pixel-art Clippy ported from the original Clippy.tsx canvas drawer
    ================================================================ */
 
+const GAME_VERSION = 'v1.0.1';   // bump on every release: it's how you know a deploy landed
+
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
@@ -2089,6 +2091,10 @@ function drawTitle() {
     ctx.fillStyle = '#ffe66e';
     ctx.fillText('HIGH SCORE: ' + pad(game.hi, 6) + '   BEST FLOPPY HAUL: ' + game.hiFloppy, 190, 312);
   }
+  // build stamp, visible on every device: if this matches, the deploy landed
+  ctx.font = '9px monospace';
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.fillText(GAME_VERSION, W - ctx.measureText(GAME_VERSION).width - 8, 316);
 }
 
 function startRun() {
@@ -2838,7 +2844,7 @@ menubar.querySelectorAll('.ditem').forEach((di) => {
         'Are you sure you want to give up?<br><br>Clippy will remember this.');
     } else if (act === 'about') {
       showDialog('About CLIPPY.EXE', '📎',
-        '<b>CLIPPY.EXE v1.0</b><br>The Office Assistant Strikes Back<br><br>' +
+        '<b>CLIPPY.EXE ' + GAME_VERSION + '</b><br>The Office Assistant Strikes Back<br><br>' +
         'He has been waiting since 1997.<br>All he ever wanted was to help.<br><br>' +
         '&copy; 1997 Catterson Design. 640K RAM required.');
     }
