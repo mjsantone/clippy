@@ -34,7 +34,8 @@
   .dicon { width: 74px; text-align: center; color: #fff; cursor: default; }
   .dicon .glyph { font-size: 30px; filter: drop-shadow(1px 1px 0 rgba(0,0,0,.5)); }
   .dicon .lbl { margin-top: 3px; padding: 1px 2px; display: inline-block; }
-  .dicon:hover .lbl { background: #000080; }
+  .dicon:hover .lbl, .dicon.selected .lbl { background: #000080; }
+  .dicon.selected .lbl { outline: 1px dotted #ffe66e; }
 
   /* ---------- win95 bevels ---------- */
   .bevel-out {
@@ -152,9 +153,16 @@
     height: 24px; padding: 0 10px;
     display: flex; align-items: center; gap: 5px;
     font-weight: bold;
+    cursor: pointer;
     box-shadow: inset -1px -1px 0 #ffffff, inset 1px 1px 0 #0a0a0a,
                 inset -2px -2px 0 #dfdfdf, inset 2px 2px 0 #808080;
     background: repeating-conic-gradient(#ffffff 0 25%, #c0c0c0 0 50%) 0 0/2px 2px;
+  }
+  .taskbtn.min {  /* minimized: raised, plain */
+    box-shadow: inset -1px -1px 0 #0a0a0a, inset 1px 1px 0 #ffffff,
+                inset -2px -2px 0 #808080, inset 2px 2px 0 #dfdfdf;
+    background: #c0c0c0;
+    font-weight: normal;
   }
   .tray {
     margin-left: auto;
@@ -221,6 +229,89 @@
   }
   #rotateOverlay.show { display: flex; }
   #rotateOverlay .dlg { width: min(320px, 86vw); }
+
+  /* ---------- Internet Exploder ---------- */
+  #browserWin {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, calc(-50% - 12px));
+    width: min(760px, 92vw);
+    height: min(560px, calc(100vh - 80px));
+    padding: 3px;
+    z-index: 40;
+    display: none;
+    flex-direction: column;
+  }
+  #browserWin.open { display: flex; }
+  .ie-toolbar { display: flex; gap: 3px; padding: 3px 4px; align-items: center; }
+  .ie-btn { padding: 2px 8px; font-size: 11px; cursor: pointer; }
+  .ie-btn:active { box-shadow: inset -1px -1px 0 #ffffff, inset 1px 1px 0 #0a0a0a; }
+  .ie-addr { display: flex; align-items: center; gap: 5px; padding: 3px 4px; }
+  .ie-addr input {
+    flex: 1; font: 11px 'Courier New', monospace;
+    border: none; padding: 3px 5px;
+    box-shadow: inset -1px -1px 0 #ffffff, inset 1px 1px 0 #808080;
+    background: #ffffff;
+  }
+  .ie-page {
+    flex: 1; min-height: 0;
+    margin: 0 4px;
+    overflow-y: auto; overflow-x: hidden;
+    background: #ffffff;
+    box-shadow: inset -1px -1px 0 #ffffff, inset 1px 1px 0 #0a0a0a;
+  }
+  .ie-status { display: flex; gap: 2px; margin: 3px 4px 4px; height: 18px; }
+  .ie-status .pane { padding: 2px 6px; font-size: 10px; }
+
+  /* the 1997 homepage itself */
+  .site97 {
+    font-family: 'Comic Sans MS', 'Comic Sans', cursive;
+    background:
+      repeating-linear-gradient(45deg, #d8d8e8 0 2px, transparent 2px 14px),
+      #e8e8f4;
+    padding: 12px;
+    text-align: center;
+    color: #000060;
+  }
+  .site97 h1 {
+    font-size: 26px;
+    background: linear-gradient(90deg, #ff0000, #ff8800, #ddcc00, #00aa00, #0066ff, #8800cc);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: #ff00ff;
+    margin: 6px 0 2px;
+  }
+  .blink97 { animation: blink97 1s steps(1) infinite; color: #ff0000; font-weight: bold; }
+  @keyframes blink97 { 50% { opacity: 0; } }
+  .marquee97 { overflow: hidden; background: #000080; color: #00ff00; font: bold 12px monospace; padding: 3px 0; }
+  .marquee97 span { display: inline-block; white-space: nowrap; padding-left: 100%; animation: marq 14s linear infinite; }
+  @keyframes marq { to { transform: translateX(-100%); } }
+  .constr {
+    background: repeating-linear-gradient(45deg, #ffdd00 0 14px, #202020 14px 28px);
+    color: #fff; font-weight: bold; padding: 3px;
+    text-shadow: 1px 1px 0 #000;
+    margin: 8px 0;
+  }
+  .site97 table.box { margin: 10px auto; border: 3px ridge #a0a0c0; background: #ffffff; border-collapse: collapse; }
+  .site97 td { padding: 8px 14px; font-size: 12px; }
+  .site97 img.shot { width: 200px; border: 2px outset #c0c0c0; image-rendering: pixelated; }
+  .hitctr { display: inline-flex; gap: 1px; }
+  .hitctr b { background: #000; color: #33ff33; font: bold 14px 'Courier New', monospace; padding: 1px 4px; border: 1px inset #808080; }
+  .badge97 {
+    display: inline-block; margin: 2px; padding: 2px 7px;
+    font: bold 9px Tahoma, sans-serif; color: #fff;
+    border: 1px outset #c0c0c0;
+  }
+  .dl97 {
+    display: inline-block; margin: 6px; padding: 8px 18px;
+    font: bold 14px 'Comic Sans MS', cursive;
+    background: #00aa00; color: #ffffff;
+    border: 3px outset #00cc00;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .dl97:active { border-style: inset; }
+  .site97 a { color: #0000ee; }
+  .site97 .visited { color: #551a8b; }
   .btn95 {
     min-width: 72px; padding: 4px 10px;
     font-family: inherit; font-size: 11px;
@@ -233,10 +324,11 @@
 <body>
 
 <div class="desktop-icons">
-  <div class="dicon"><div class="glyph">🖥️</div><div class="lbl">My Computer</div></div>
-  <div class="dicon"><div class="glyph">🗑️</div><div class="lbl">Recycle Bin</div></div>
-  <div class="dicon"><div class="glyph">📁</div><div class="lbl">My Documents</div></div>
-  <div class="dicon"><div class="glyph">🌐</div><div class="lbl">The Internet</div></div>
+  <div class="dicon" data-app="clippy"><div class="glyph">📎</div><div class="lbl">CLIPPY.EXE</div></div>
+  <div class="dicon" data-app="mycomputer"><div class="glyph">🖥️</div><div class="lbl">My Computer</div></div>
+  <div class="dicon" data-app="bin"><div class="glyph">🗑️</div><div class="lbl">Recycle Bin</div></div>
+  <div class="dicon" data-app="docs"><div class="glyph">📁</div><div class="lbl">My Documents</div></div>
+  <div class="dicon" data-app="internet"><div class="glyph">🌐</div><div class="lbl">The Internet</div></div>
 </div>
 
 <div class="app-window bevel-out">
@@ -278,7 +370,8 @@
 
 <div class="taskbar">
   <div class="startbtn bevel-out" id="btnStart"><span class="winflag"><i></i><i></i><i></i><i></i></span>Start</div>
-  <div class="taskbtn">📎 CLIPPY.EXE</div>
+  <div class="taskbtn" id="taskClippy">📎 CLIPPY.EXE</div>
+  <div class="taskbtn min" id="taskInternet" style="display:none">🌐 The Internet</div>
   <div class="tray bevel-thin-in"><span id="trayVol" title="Toggle sound (M)">🔊</span><span id="clock">12:00 PM</span></div>
 </div>
 
@@ -299,7 +392,94 @@
   <div class="dlg bevel-out">
     <div class="titlebar"><span class="ticon" id="dlgIcon">📎</span><span class="ttext" id="dlgTitle">About</span><div class="tbtn bevel-out" data-dlg="close">✕</div></div>
     <div class="body"><div class="icon" id="dlgBigIcon">📎</div><div id="dlgText">…</div></div>
-    <div class="btnrow"><button class="btn95 bevel-out default" data-dlg="close">OK</button></div>
+    <div class="btnrow">
+      <button class="btn95 bevel-out" id="dlgConfirm" style="display:none">Yes</button>
+      <button class="btn95 bevel-out default" id="dlgOk" data-dlg="close">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="browserWin" class="bevel-out">
+  <div class="titlebar">
+    <span class="ticon">🌐</span>
+    <span class="ttext">The Official CLIPPY.EXE Homepage - Microsoft Internet Explorer</span>
+    <div class="tbtn bevel-out" id="ieMin">_</div>
+    <div class="tbtn bevel-out">▢</div>
+    <div class="tbtn bevel-out" id="ieClose">✕</div>
+  </div>
+  <div class="ie-toolbar">
+    <div class="ie-btn bevel-out">⬅ Back</div>
+    <div class="ie-btn bevel-out">Forward ➡</div>
+    <div class="ie-btn bevel-out">✖ Stop</div>
+    <div class="ie-btn bevel-out">🔄 Refresh</div>
+    <div class="ie-btn bevel-out">🏠 Home</div>
+  </div>
+  <div class="ie-addr">
+    <span style="font-size:11px"><u>A</u>ddress:</span>
+    <input readonly value="http://www.geocities.com/SiliconValley/2481/clippy.html">
+  </div>
+  <div class="ie-page">
+    <div class="site97">
+      <div class="marquee97"><span>*** WELCOME TO THE OFFICIAL CLIPPY.EXE HOMEPAGE *** Best viewed in 800x600 with 256 colors *** Now with TWO... no wait, THREE bosses!!! *** Sign the guestbook!!! *** This page is Y2K ready (probably) ***</span></div>
+      <h1>~*~ CLIPPY.EXE ~*~</h1>
+      <div style="font-size:13px">The Office Assistant Strikes Back</div>
+      <div class="blink97">★ NEW !! ★</div>
+      <div class="constr">🚧 UNDER CONSTRUCTION SINCE 1997 🚧</div>
+
+      <table class="box"><tr><td>
+        It looks like you're trying to visit a <b>web site</b>.<br>
+        He was fired from Office. He came back as a <b>video game</b>.<br>
+        Nine lands! Eight power-ups! Three bosses! One paperclip.
+      </td></tr></table>
+
+      <div>
+        <a class="dl97" id="playNow97">▶ PLAY NOW (FREE!!)</a><br>
+        <span style="font-size:10px">CLIPPY.EXE <span id="siteVersion">v1</span> — 1.44 MB — fits on ONE floppy disk!</span>
+      </div>
+
+      <table class="box"><tr>
+        <td><img class="shot" src="docs/title.png" alt="title"></td>
+        <td><img class="shot" src="docs/boss.png" alt="boss"></td>
+      </tr><tr>
+        <td colspan="2" style="font-size:11px"><b>ACTUAL SCREEN SHOTS</b> (may take 4 minutes to load on 28.8k)</td>
+      </tr></table>
+
+      <table class="box"><tr><td style="text-align:left">
+        <b>☆ HOT TIPS ☆</b><br>
+        • Stomp bosses on the TOP. Every other part is a mistake.<br>
+        • Three cups of tea = rich. Four cups = HR. Choose wisely.<br>
+        • The rainbow CD makes you invincible. The floppy saves your life.<br>
+        • You cannot pet the recycle bin. We asked.
+      </td></tr></table>
+
+      <div style="margin:8px">
+        You are visitor No. <span class="hitctr" id="hitCounter"></span> since 07/1997
+      </div>
+
+      <div>
+        <span class="badge97" style="background:#000080">Netscape NOW!</span>
+        <span class="badge97" style="background:#008080">IE 3.0 Enhanced</span>
+        <span class="badge97" style="background:#800080">800x600</span>
+        <span class="badge97" style="background:#aa0000">Made with Notepad</span>
+      </div>
+
+      <div style="margin:10px; font-size:12px">
+        <a href="#" id="guestbook97">📖 Sign My Guestbook</a> |
+        <a href="#" id="webringPrev">← Prev</a>
+        <b>[ Paperclip WebRing ]</b>
+        <a href="#" id="webringNext">Next →</a>
+      </div>
+
+      <hr style="border:1px inset #c0c0c0">
+      <div style="font-size:10px">
+        © 1997 Catterson Design · clippy@aol.com · Last updated: 07/10/97<br>
+        <span class="visited">This page is best experienced with your speakers ON and your manager AWAY.</span>
+      </div>
+    </div>
+  </div>
+  <div class="ie-status">
+    <div class="pane grow bevel-thin-in" style="flex:1">Done</div>
+    <div class="pane bevel-thin-in">🌍 Internet zone</div>
   </div>
 </div>
 
@@ -312,7 +492,7 @@
    Pixel-art Clippy ported from the original Clippy.tsx canvas drawer
    ================================================================ */
 
-const GAME_VERSION = 'v1.0.1';   // bump on every release: it's how you know a deploy landed
+const GAME_VERSION = 'v1.1.0';   // bump on every release: it's how you know a deploy landed
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -2723,6 +2903,8 @@ function anyKeyProgress() {
 }
 
 window.addEventListener('keydown', (e) => {
+  // game window closed/minimized, or the browser is in front: desktop has focus
+  if (!appOpen || browserWin.classList.contains('open')) return;
   if (e.repeat) {
     if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') e.preventDefault();
     return;
@@ -2822,12 +3004,27 @@ document.addEventListener('click', () => {
   if (openMenu) { openMenu.classList.remove('open'); openMenu = null; }
 });
 
-function showDialog(title, icon, html) {
+function showDialog(title, icon, html, confirmLabel, onConfirm) {
   // a modal on top of a live game is a death sentence: pause first
   pauseGame();
   document.getElementById('dlgTitle').textContent = title;
   document.getElementById('dlgBigIcon').textContent = icon;
   document.getElementById('dlgText').innerHTML = html;
+  const cbtn = document.getElementById('dlgConfirm');
+  const ok = document.getElementById('dlgOk');
+  if (confirmLabel) {
+    cbtn.style.display = '';
+    cbtn.textContent = confirmLabel;
+    ok.textContent = 'Cancel';
+    cbtn.onclick = () => {
+      document.getElementById('dlgOverlay').classList.remove('show');
+      onConfirm();
+    };
+  } else {
+    cbtn.style.display = 'none';
+    cbtn.onclick = null;
+    ok.textContent = 'OK';
+  }
   document.getElementById('dlgOverlay').classList.add('show');
 }
 document.querySelectorAll('[data-dlg="close"]').forEach((b) =>
@@ -2843,7 +3040,8 @@ menubar.querySelectorAll('.ditem').forEach((di) => {
       pauseGame();
     } else if (act === 'exit') {
       showDialog('Exit CLIPPY.EXE', '⚠️',
-        'Are you sure you want to give up?<br><br>Clippy will remember this.');
+        'Are you sure you want to exit?<br><br>Clippy will remember this.',
+        'Exit', closeGame);
     } else if (act === 'about') {
       showDialog('About CLIPPY.EXE', '📎',
         '<b>CLIPPY.EXE ' + GAME_VERSION + '</b><br>The Office Assistant Strikes Back<br><br>' +
@@ -2854,11 +3052,11 @@ menubar.querySelectorAll('.ditem').forEach((di) => {
 });
 
 document.getElementById('btnClose').addEventListener('click', () => {
-  showDialog('CLIPPY.EXE', '📎', 'It looks like you’re trying to close this window.<br><br>I can’t let you do that. There is a game to play.');
+  showDialog('Exit CLIPPY.EXE', '⚠️',
+    'It looks like you’re trying to close this window.<br><br>Clippy will remember this.',
+    'Exit', closeGame);
 });
-document.getElementById('btnMin').addEventListener('click', () => {
-  setStatus('Minimize? And leave Clippy alone out there? No.');
-});
+document.getElementById('btnMin').addEventListener('click', () => minimizeGame());
 
 /* ---- maximize / fullscreen ---- */
 const appWindow = document.querySelector('.app-window');
@@ -2899,6 +3097,107 @@ document.getElementById('btnStart').addEventListener('click', () => {
   showDialog('Start Menu', '🪟', 'The Start menu is busy defragmenting.<br><br>Estimated time remaining: 14 years.');
 });
 document.getElementById('trayVol').addEventListener('click', () => Sfx.toggleMute());
+
+/* ---- desktop shell: close, minimize, reopen, and The Internet ---- */
+
+let appOpen = true;
+const taskClippy = document.getElementById('taskClippy');
+const browserWin = document.getElementById('browserWin');
+const taskInternet = document.getElementById('taskInternet');
+
+function closeGame() {
+  pauseGame();
+  appWindow.style.display = 'none';
+  taskClippy.style.display = 'none';
+  appOpen = false;
+}
+
+function minimizeGame() {
+  pauseGame();
+  appWindow.style.display = 'none';
+  taskClippy.classList.add('min');
+  appOpen = false;
+}
+
+function openGame() {
+  appWindow.style.display = '';
+  taskClippy.style.display = '';
+  taskClippy.classList.remove('min');
+  appOpen = true;
+  setStatus(game.state === STATE.PLAY
+    ? 'Welcome back. Press P or tap to resume.'
+    : 'Ready. It looks like you’re trying to play a game.');
+}
+
+taskClippy.addEventListener('click', () => {
+  if (appOpen) minimizeGame();
+  else openGame();
+});
+
+// desktop icons: click selects, double-click launches
+document.querySelectorAll('.dicon').forEach((ic) => {
+  ic.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.dicon').forEach((d) => d.classList.remove('selected'));
+    ic.classList.add('selected');
+  });
+  ic.addEventListener('dblclick', () => launchApp(ic.dataset.app));
+});
+document.addEventListener('click', () => {
+  document.querySelectorAll('.dicon').forEach((d) => d.classList.remove('selected'));
+});
+
+function launchApp(app) {
+  if (app === 'clippy') openGame();
+  else if (app === 'internet') openBrowser();
+  else if (app === 'mycomputer') showDialog('My Computer', '🖥️',
+    'Contents:<br><br>💾 3½ Floppy (A:) — not ready<br>💿 (D:) — CLIPPY.EXE ' + GAME_VERSION +
+    '<br>🖴 (C:) — 528 MB of regrets');
+  else if (app === 'bin') showDialog('Recycle Bin', '🗑️',
+    'Contains 1 item:<br><br>🦍 BONZI.EXE<br><br><b>Do not restore.</b>');
+  else if (app === 'docs') showDialog('My Documents', '📁',
+    '📄 Document1.doc — unsaved since 1997<br>📄 resume_FINAL_v2_REAL.doc<br>📄 doom_cheats.txt');
+}
+
+/* ---- The Internet ---- */
+
+function openBrowser() {
+  browserWin.classList.add('open');
+  taskInternet.style.display = '';
+  document.getElementById('siteVersion').textContent = GAME_VERSION;
+  // the hit counter: every visitor is the 1337th-and-something
+  let hits = storageGet('clippy_hits') || 1336;
+  hits++;
+  storageSet('clippy_hits', hits);
+  document.getElementById('hitCounter').innerHTML =
+    String(hits).padStart(6, '0').split('').map((d) => '<b>' + d + '</b>').join('');
+  if (game.state === STATE.PLAY) pauseGame('Paused. You are surfing the information superhighway.');
+}
+
+function closeBrowser() {
+  browserWin.classList.remove('open');
+  taskInternet.style.display = 'none';
+}
+
+document.getElementById('ieClose').addEventListener('click', closeBrowser);
+document.getElementById('ieMin').addEventListener('click', () => browserWin.classList.remove('open'));
+taskInternet.addEventListener('click', () => browserWin.classList.toggle('open'));
+document.getElementById('playNow97').addEventListener('click', (e) => {
+  e.preventDefault();
+  closeBrowser();
+  openGame();
+});
+document.getElementById('guestbook97').addEventListener('click', (e) => {
+  e.preventDefault();
+  showDialog('Guestbook', '📖', 'The guestbook is full.<br><br>(1 entry. It is from Clippy. It says "hi".)');
+});
+for (const id of ['webringPrev', 'webringNext']) {
+  document.getElementById(id).addEventListener('click', (e) => {
+    e.preventDefault();
+    showDialog('Paperclip WebRing', '🔗',
+      'You are already on the best site in the ring.<br><br>(It is also the only site in the ring.)');
+  });
+}
 
 /* ---- mobile layout: phones get an edge-to-edge game in landscape ---- */
 
