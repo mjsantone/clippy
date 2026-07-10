@@ -52,6 +52,7 @@ get him.
 | 🧲 **Defrag Magnet** | Floppy disks within reach fly to you for 8 seconds |
 | ✈️ **Airmail** | Clippy rides a letter — hold JUMP mid-air to glide for 7 seconds. *"It looks like you're writing a letter... TO THE SKY!"* |
 | 🔍 **View > Zoom 50%** | Clippy shrinks to half size for 8 seconds — tiny hitbox, huge world |
+| ☕ **Cup of Tea** | The internal gossip. Cups pay compounding dividends (+50/+100/+150)… but grab a **fourth** and HR is notified: a homing meeting request hunts you for five seconds. Greed is a choice |
 
 Active effects show as beveled tags under the score bar and blink when about
 to expire. Effects stack — coffee-doubled card bombs are the path to big scores.
@@ -78,8 +79,15 @@ slides over your head, and **slams down**, sending shockwaves along the
 ground. While it sits there pressed-in and stunned — jump on it. Where do you
 want to go today? DOWN.
 
-Defeating either detonates a Solitaire card storm, a floppy shower, and a
-500-point bounty.
+**TEA.EXE — The Internal Tea (Do Not Forward).** A giant, furious office
+teacup — angry eyes, steam, a teabag tag reading *HOT GOSS*. It drifts around
+lobbing gossip bubbles (*"fwd: fwd: fwd:"*, *"per my last"*), then tips over
+and **spills**: a scalding tea tide surges along the taskbar and leaves
+steaming puddles that linger. Empty, it sinks to the ground to re-steep —
+that's when you stomp it. *"Steeped! Per my last stomp—"*
+
+Bosses rotate Twin → START → TEA. Defeating any of them detonates a Solitaire
+card storm, a floppy shower, and a 500-point bounty.
 
 Clippy provides unsolicited commentary throughout, naturally.
 *"It looks like you're trying to survive. Would you like help with that?"*
