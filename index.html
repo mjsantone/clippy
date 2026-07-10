@@ -442,6 +442,8 @@ const Sfx = {
   throwSfx(){ this.tone(820,0.09,'square',0.08,300); },
   bossHit(){ this.tone(160,0.16,'sawtooth',0.14,70); this.tone(1100,0.06,'square',0.1); },
   bossDie(){ this.tone(700,0.5,'sawtooth',0.12,60); [523,659,784,1046,1318].forEach((f,i)=>setTimeout(()=>this.tone(f,0.2,'triangle',0.11),350+i*90)); },
+  slam()   { this.tone(95,0.35,'sine',0.2,38); this.tone(60,0.3,'sawtooth',0.12,30); },
+  menuPop(){ this.tone(480,0.07,'square',0.08,760); },
   chime()  { [330,415,494,659].forEach((f,i)=>setTimeout(()=>this.tone(f,0.9,'triangle',0.10),i*120)); },
   // ------ music ------
   mode: 'normal',
@@ -571,6 +573,9 @@ const QUIPS = {
   bossIntro:"My evil twin! He stopped responding in 1997 and never forgave me. STOMP HIM!",
   bossHit:  "Direct hit! Have you tried turning him off?",
   bossDead: "Task terminated successfully. He won't be sending a crash report.",
+  startIntro:"The Start button finished defragmenting... and it is DONE waiting. Dodge the menus, stomp it when it slams!",
+  startHit: "Right on the flag! Where do you want to go today? DOWN.",
+  startDead:"Start has been shut down. It is now safe to turn off your paperclip.",
   smash:    "It looks like that window stopped responding.",
   floppy5:  "You've got floppy! That's 1.44 MB of pure skill.",
   zone:     "Now entering: ",
@@ -604,6 +609,7 @@ const game = {
   projectiles: [],
   bossesKilled: 0,
   nextBossScore: 2000,
+  forceBossKind: null,
   bubbleText: '',
   bubbleT: 0,
   quipCooldown: 0,
@@ -665,6 +671,7 @@ function resetRun() {
   game.nextSpawnX = W + 220;
   game.multT = 0; game.slowmoT = 0; game.magnetT = 0; game.lastPowerDist = 0;
   game.boss = null; game.projectiles = []; game.bossesKilled = 0; game.nextBossScore = 2000;
+  game.forceBossKind = null;
   Sfx.setMode('normal');
   game.bubbleT = 0; game.quipCooldown = 0; game.flags = {};
   player.bottomY = GROUND_Y; player.vy = 0; player.grounded = true;
@@ -1430,26 +1437,52 @@ function updateWorld() {
 /* ---------------- boss: clippy.exe (Not Responding) -------------------- */
 
 const BOSS_X = 508;
-const BOSS_BODY_W = 42, BOSS_BODY_H = 93;   // visible rows 3..34 at PXB=3
+const BOSS_BODY_W = 42, BOSS_BODY_H = 93;   // twin: visible rows 3..34 at PXB=3
+const SBTN_W = 118, SBTN_H = 46;            // START.EXE button dimensions
+const SBTN_HOVER = GROUND_Y - 168;          // bottomY while hovering
 
 function startBoss() {
   const lvl = game.bossesKilled;
   const hp = 3 + Math.min(2, lvl);
+  // bosses alternate: evil twin, then the Start button, then twin again...
+  const kind = game.forceBossKind || (game.bossesKilled % 2 === 1 ? 'start' : 'twin');
+  game.forceBossKind = null;
   game.boss = {
-    lvl, hp, maxHp: hp,
+    kind, lvl, hp, maxHp: hp,
     x: W + 90,
-    bottomY: GROUND_Y - 132, baseY: GROUND_Y - 132,
-    phase: 'enter', t: 0, throws: 0, hitCd: 0,
+    bottomY: kind === 'start' ? SBTN_HOVER : GROUND_Y - 132,
+    baseY: kind === 'start' ? SBTN_HOVER : GROUND_Y - 132,
+    phase: 'enter', t: 0, throws: 0, hitCd: 0, targetX: 0,
   };
   game.projectiles = [];
   Sfx.alarm();
   Sfx.setMode('boss');
-  say(QUIPS.bossIntro, 220);
-  setStatus('WARNING: clippy.exe (Not Responding). End task by stomping.');
+  say(kind === 'start' ? QUIPS.startIntro : QUIPS.bossIntro, 220);
+  setStatus(kind === 'start'
+    ? 'WARNING: START.EXE is awake. Mind the menus.'
+    : 'WARNING: clippy.exe (Not Responding). End task by stomping.');
 }
 
 function bossBox(b) {
+  if (b.kind === 'start') {
+    return { x: b.x - SBTN_W / 2, y: b.bottomY - SBTN_H, w: SBTN_W, h: SBTN_H };
+  }
   return { x: b.x - BOSS_BODY_W / 2, y: b.bottomY - BOSS_BODY_H, w: BOSS_BODY_W, h: BOSS_BODY_H };
+}
+
+function spawnPillar(x) {
+  game.projectiles.push({
+    type: 'pillar', x: x - 32, y: GROUND_Y, w: 64, h: 0,
+    maxH: rnd(85, 150), t: 0,
+  });
+  Sfx.menuPop();
+}
+
+function spawnWave(x, dir, lvl) {
+  game.projectiles.push({
+    type: 'wave', x, y: GROUND_Y - 14, w: 24, h: 14,
+    vx: dir * (3 + lvl * 0.4), t: 0,
+  });
 }
 
 function damageBoss(b) {
@@ -1480,11 +1513,91 @@ function throwProjectile(b) {
   Sfx.throwSfx();
 }
 
-function updateBoss(ts) {
-  const b = game.boss;
-  b.t++;
-  if (b.hitCd > 0) b.hitCd--;
+// shared death animation + payout; returns true when the boss is gone
+function bossDeathTick(b) {
+  game.shake = Math.max(game.shake, 3);
+  if (b.t % 7 === 0) {
+    burst(b.x + rnd(-20, 20), b.bottomY - rnd(10, 85),
+      ['#3e3e46', '#8a8a96', '#cc1010', '#ffffff', '#0000aa'], 8, 3.5);
+    burstCards(b.x, b.bottomY - 46);
+  }
+  if (b.t >= 64) {
+    for (let i = 0; i < 8; i++) {
+      game.coins.push({ kind: 'floppy', x: b.x - 90 + i * 26, y: GROUND_Y - 60 - Math.sin(i / 7 * Math.PI) * 80, w: 14, h: 15 });
+    }
+    addScore(500);
+    game.bossesKilled++;
+    game.nextBossScore = game.score + 2500;
+    game.boss = null;
+    game.nextSpawnX = game.dist + 380;
+    Sfx.setMode('normal');
+    say(b.kind === 'start' ? QUIPS.startDead : QUIPS.bossDead, 180);
+    setStatus(b.kind === 'start'
+      ? 'START.EXE shut down. It is now safe to keep running.'
+      : 'Evil twin terminated. It is once again safe to run.');
+    return true;
+  }
+  return false;
+}
 
+// shared stomp / HYPER-ram / body-contact rules
+function bossPlayerContact(b) {
+  const bb = bossBox(b), pb = playerBox();
+  if (!overlap(pb, bb)) return;
+  const stomp = player.vy > 1.2 && (pb.y + pb.h) < bb.y + 28;
+  if (stomp) {
+    damageBoss(b);
+    addScore(150);
+    player.vy = -9.6; player.grounded = false; player.jumps = 1;
+    player.spinning = false; player.rot = 0;
+    player.graceT = 50;
+    Sfx.djump();
+  } else if (player.inv > 0) {
+    if (b.hitCd === 0) damageBoss(b);
+  } else if (player.graceT === 0) {
+    crash();
+  }
+}
+
+function updateStartBoss(b, ts) {
+  if (b.phase === 'enter') {
+    b.x -= 3.2 * ts;
+    b.bottomY += (b.baseY - b.bottomY) * 0.08;
+    if (b.x <= 430) { b.x = 430; b.phase = 'menus'; b.t = 0; }
+  } else if (b.phase === 'menus') {
+    b.bottomY = b.baseY + Math.sin(b.t * 0.05) * 10;
+    // erupting Start menus: two random, one leading the player
+    if (b.t === 24) spawnPillar(rnd(220, 560));
+    if (b.t === 86) spawnPillar(rnd(220, 560));
+    if (b.t === 148) spawnPillar(Math.min(600, player.cx + rnd(40, 90)));
+    if (b.t > 148 + 40) { b.phase = 'aim'; b.t = 0; }
+  } else if (b.phase === 'aim') {
+    // slide over the player's column, telegraphing the slam
+    b.x += (Math.max(150, player.cx) - b.x) * 0.12;
+    b.bottomY = b.baseY + rnd(-2, 2);
+    if (b.t > 55) { b.phase = 'slam'; b.t = 0; }
+  } else if (b.phase === 'slam') {
+    b.bottomY += 15 * ts;
+    if (b.bottomY >= GROUND_Y) {
+      b.bottomY = GROUND_Y;
+      b.phase = 'stunned'; b.t = 0;
+      game.shake = 12;
+      burst(b.x, GROUND_Y - 6, ['#c0c0c0', '#808080', '#ffffff'], 14, 4);
+      spawnWave(b.x - SBTN_W / 2 - 10, -1, b.lvl);
+      spawnWave(b.x + SBTN_W / 2 - 14, 1, b.lvl);
+      Sfx.slam();
+    }
+  } else if (b.phase === 'stunned') {
+    // pressed into the taskbar: this is the stomp window
+    if (b.t > 95) { b.phase = 'rise'; b.t = 0; }
+  } else if (b.phase === 'rise' || b.phase === 'stagger') {
+    b.bottomY += (b.baseY - b.bottomY) * 0.12;
+    b.x += (430 - b.x) * 0.06;
+    if (b.t > 42) { b.phase = 'menus'; b.t = 0; }
+  }
+}
+
+function updateTwinBoss(b, ts) {
   if (b.phase === 'enter') {
     b.x -= 3.2 * ts;
     b.bottomY += (b.baseY - b.bottomY) * 0.08;
@@ -1507,60 +1620,53 @@ function updateBoss(ts) {
     b.x = Math.min(BOSS_X + 36, b.x + 6.5);
     b.bottomY += (b.baseY - b.bottomY) * 0.15;
     if (b.t > 46) { b.phase = 'hover'; b.t = 0; b.throws = 0; }
-  } else if (b.phase === 'dying') {
-    game.shake = Math.max(game.shake, 3);
-    if (b.t % 7 === 0) {
-      burst(b.x + rnd(-20, 20), b.bottomY - rnd(10, 85),
-        ['#3e3e46', '#8a8a96', '#cc1010', '#ffffff', '#0000aa'], 8, 3.5);
-      burstCards(b.x, b.bottomY - 46);
-    }
-    if (b.t >= 64) {
-      // floppy shower + bounty
-      for (let i = 0; i < 8; i++) {
-        game.coins.push({ kind: 'floppy', x: b.x - 90 + i * 26, y: GROUND_Y - 60 - Math.sin(i / 7 * Math.PI) * 80, w: 14, h: 15 });
-      }
-      addScore(500);
-      game.bossesKilled++;
-      game.nextBossScore = game.score + 2500;
-      game.boss = null;
-      game.nextSpawnX = game.dist + 380;
-      Sfx.setMode('normal');
-      say(QUIPS.bossDead, 180);
-      setStatus('Evil twin terminated. It is once again safe to run.');
-      return;
-    }
+  }
+}
+
+function updateBoss(ts) {
+  const b = game.boss;
+  b.t++;
+  if (b.hitCd > 0) b.hitCd--;
+
+  if (b.phase === 'dying') {
+    bossDeathTick(b);
+    return;
   }
 
+  if (b.kind === 'start') updateStartBoss(b, ts);
+  else updateTwinBoss(b, ts);
+
   // stomp + body collision (no body while exploding or knocked back)
-  if (b.phase !== 'dying' && b.phase !== 'stagger') {
-    const bb = bossBox(b), pb = playerBox();
-    if (overlap(pb, bb)) {
-      const stomp = player.vy > 1.2 && (pb.y + pb.h) < bb.y + 28;
-      if (stomp) {
-        damageBoss(b);
-        addScore(150);
-        player.vy = -9.6; player.grounded = false; player.jumps = 1;
-        player.spinning = false; player.rot = 0;
-        player.graceT = 50;                 // mercy frames while bouncing off
-        Sfx.djump();
-      } else if (player.inv > 0) {
-        if (b.hitCd === 0) damageBoss(b);   // HYPER mode: ram him
-      } else if (player.graceT === 0) {
-        crash();
-      }
-    }
+  if (game.boss && b.phase !== 'dying' && b.phase !== 'stagger') {
+    bossPlayerContact(b);
   }
 }
 
 function updateProjectiles(ts) {
   const pb = playerBox();
   for (const p of game.projectiles) {
-    p.x += p.vx * ts; p.y += p.vy * ts; p.rot += 0.13;
-    if (p.y > GROUND_Y - 12) {   // shatters on the taskbar
-      p.dead = true;
-      burst(p.x + 15, GROUND_Y - 6, ['#c0c0c0', '#ffffff', '#cc0000'], 6, 2);
+    let hitActive = true;
+    if (p.type === 'pillar') {
+      // erupting Start menu: warn, rise, hold, retract
+      p.t++;
+      const RISE_AT = 30, RISE_LEN = 12, HOLD = 78;
+      if (p.t < RISE_AT) { hitActive = false; }
+      else if (p.t < RISE_AT + RISE_LEN) { p.h = p.maxH * (p.t - RISE_AT) / RISE_LEN; }
+      else if (p.t < RISE_AT + RISE_LEN + HOLD) { p.h = p.maxH; }
+      else { p.h -= p.maxH / 14; if (p.h <= 3) { p.dead = true; continue; } }
+      p.y = GROUND_Y - p.h;
+    } else if (p.type === 'wave') {
+      p.t++;
+      p.x += p.vx * ts;
+      if (p.t > 150 || p.x < -30 || p.x > W + 30) { p.dead = true; continue; }
+    } else {
+      p.x += p.vx * ts; p.y += p.vy * ts; p.rot += 0.13;
+      if (p.y > GROUND_Y - 12) {   // shatters on the taskbar
+        p.dead = true;
+        burst(p.x + 15, GROUND_Y - 6, ['#c0c0c0', '#ffffff', '#cc0000'], 6, 2);
+      }
     }
-    if (!p.dead && overlap(pb, { x: p.x + 3, y: p.y + 3, w: p.w - 6, h: p.h - 6 })) {
+    if (!p.dead && hitActive && overlap(pb, { x: p.x + 3, y: p.y + 3, w: p.w - 6, h: Math.max(2, p.h - 6) })) {
       if (player.inv > 0) {
         p.dead = true;
         addScore(25);
@@ -1922,9 +2028,66 @@ function drawBsod() {
 
 /* ---------------- boss drawing ----------------------------------------- */
 
+function drawStartBoss(b) {
+  const w = SBTN_W, h = SBTN_H;
+  const pressed = b.phase === 'stunned';
+  const x = b.x - w / 2, y = b.bottomY - h;
+
+  // slam shadow on the taskbar while aiming/falling
+  if (b.phase === 'aim' || b.phase === 'slam') {
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath(); ctx.ellipse(b.x, GROUND_Y - 3, w * 0.45, 5, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  ctx.save();
+  if (b.phase === 'dying') {
+    ctx.globalAlpha = Math.max(0.1, 1 - b.t / 64);
+    ctx.translate(rnd(-3, 3), rnd(-3, 3));
+  }
+  // giant Start button, pressed-in while stunned
+  ctx.fillStyle = '#c0c0c0'; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = pressed ? '#404040' : '#ffffff';
+  ctx.fillRect(x, y, w, 3); ctx.fillRect(x, y, 3, h);
+  ctx.fillStyle = pressed ? '#ffffff' : '#404040';
+  ctx.fillRect(x, y + h - 3, w, 3); ctx.fillRect(x + w - 3, y, 3, h);
+  const off = pressed ? 2 : 0;
+  // windows flag
+  const cols = ['#e04b34', '#7db700', '#2e8fef', '#ffba08'];
+  for (let i = 0; i < 4; i++) {
+    ctx.fillStyle = cols[i];
+    ctx.fillRect(x + 12 + (i % 2) * 12 + off, y + 13 + Math.floor(i / 2) * 12 + off, 10, 10);
+  }
+  // 'Start' text
+  ctx.fillStyle = '#000000'; ctx.font = 'bold 15px Tahoma, sans-serif';
+  ctx.fillText('Start', x + 39 + off, y + 31 + off);
+  // angry eyes + brows
+  ctx.fillStyle = '#181820';
+  ctx.fillRect(x + w - 40 + off, y + 14 + off, 8, 8); ctx.fillRect(x + w - 24 + off, y + 14 + off, 8, 8);
+  ctx.fillRect(x + w - 42 + off, y + 9 + off, 11, 3); ctx.fillRect(x + w - 26 + off, y + 9 + off, 11, 3);
+  ctx.fillStyle = '#cc1010';
+  ctx.fillRect(x + w - 38 + off, y + 16 + off, 4, 4); ctx.fillRect(x + w - 22 + off, y + 16 + off, 4, 4);
+  ctx.restore();
+
+  // red warning flash while it locks on
+  if (b.phase === 'aim' && Math.floor(b.t / 5) % 2 === 0) {
+    ctx.fillStyle = 'rgba(255,0,0,0.2)';
+    ctx.fillRect(x - 5, y - 5, w + 10, h + 10);
+  }
+
+  // floating tooltip label
+  if (b.phase !== 'dying') {
+    const tw = 132, tx = b.x - tw / 2, ty = y - 26;
+    ctx.fillStyle = '#c0c0c0'; ctx.fillRect(tx - 2, ty - 2, tw + 4, 18);
+    ctx.fillStyle = '#000080'; ctx.fillRect(tx, ty, tw, 14);
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 8px monospace';
+    ctx.fillText('START.EXE — 4% defragged', tx + 5, ty + 10);
+  }
+}
+
 function drawBoss() {
   const b = game.boss;
   if (!b) return;
+  if (b.kind === 'start') { drawStartBoss(b); return; }
   const flicker = b.phase !== 'dying' && (b.t % 44) < 5;
 
   ctx.save();
@@ -1958,8 +2121,39 @@ function drawBoss() {
   }
 }
 
+function drawPillar(p) {
+  if (p.t < 30) {
+    // flashing hazard stripes where the menu will erupt
+    if (Math.floor(game.frame / 5) % 2 === 0) {
+      ctx.fillStyle = '#ffdd00'; ctx.fillRect(p.x, GROUND_Y - 5, p.w, 5);
+      ctx.fillStyle = '#202020';
+      for (let sx = p.x + 2; sx < p.x + p.w - 6; sx += 12) ctx.fillRect(sx, GROUND_Y - 5, 6, 5);
+    }
+    return;
+  }
+  const y = p.y, h = p.h;
+  bevelRect(p.x, y, p.w, h + 2, true);
+  ctx.fillStyle = '#000080'; ctx.fillRect(p.x + 3, y + 3, 8, Math.max(0, h - 4));   // sidebar
+  const items = ['Programs', 'Documents', 'Settings', 'Find', 'Run...', 'Shut Down'];
+  ctx.font = 'bold 7px monospace';
+  let iy = y + 13;
+  for (const it of items) {
+    if (iy > y + h - 5) break;
+    ctx.fillStyle = '#808080'; ctx.fillRect(p.x + 14, iy - 6, 6, 6);
+    ctx.fillStyle = '#000000'; ctx.fillText(it, p.x + 23, iy);
+    iy += 13;
+  }
+}
+
+function drawWave(p) {
+  bevelRect(p.x, p.y, p.w, p.h, true);
+  ctx.fillStyle = '#808080'; ctx.fillRect(p.x + 6, p.y + 5, p.w - 12, 2);
+}
+
 function drawProjectiles() {
   for (const p of game.projectiles) {
+    if (p.type === 'pillar') { drawPillar(p); continue; }
+    if (p.type === 'wave') { drawWave(p); continue; }
     ctx.save();
     ctx.translate(p.x + p.w / 2, p.y + p.h / 2);
     ctx.rotate(p.rot);
@@ -1983,7 +2177,9 @@ function drawBossBar() {
   ctx.fillStyle = '#ffffff'; ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y, 1, 27);
   ctx.fillStyle = '#404040'; ctx.fillRect(x, y + 26, w, 1); ctx.fillRect(x + w - 1, y, 1, 27);
   ctx.fillStyle = '#000000'; ctx.font = 'bold 8px monospace';
-  ctx.fillText('EVIL TWIN — clippy.exe (Not Responding)', x + 6, y + 10);
+  ctx.fillText(b.kind === 'start'
+    ? 'START.EXE — The Button That Would Not Stop'
+    : 'EVIL TWIN — clippy.exe (Not Responding)', x + 6, y + 10);
   // sunken segmented meter, like a defrag bar gone wrong
   ctx.fillStyle = '#808080'; ctx.fillRect(x + 5, y + 13, w - 10, 10);
   ctx.fillStyle = '#ffffff'; ctx.fillRect(x + 5, y + 22, w - 10, 1);
@@ -2454,7 +2650,8 @@ window.__clippy = {
   give(kind) {
     game.coins.push({ kind, x: player.cx + 50, y: GROUND_Y - 70, w: 22, h: 22 });
   },
-  summonBoss() {
+  summonBoss(kind) {
+    if (kind) game.forceBossKind = kind;
     game.nextBossScore = game.score;
   },
   // dev utility: renders the app icon (used to generate icons/*.png)
