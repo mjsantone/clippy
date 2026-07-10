@@ -1524,9 +1524,11 @@ function bossBox(b) {
 const GOSSIP_TEXTS = ['fwd: fwd: fwd:', 'did u hear??', 're: re: re:', 'per my last', 'CONFIDENTIAL', 'reply-all 😱'];
 
 function spawnGossip(b) {
+  const txt = pick(GOSSIP_TEXTS);
   game.projectiles.push({
-    type: 'gossip', x: b.x - 50, y: b.bottomY - 44, w: 56, h: 24,
-    vx: -(2.4 + b.lvl * 0.3), t: 0, txt: pick(GOSSIP_TEXTS),
+    // bubble sized to its gossip (7px monospace ≈ 4.3px/char)
+    type: 'gossip', x: b.x - 50, y: b.bottomY - 44, w: 14 + Math.ceil(txt.length * 4.3), h: 24,
+    vx: -(2.4 + b.lvl * 0.3), t: 0, txt,
   });
   Sfx.gossip();
 }
